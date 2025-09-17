@@ -1,0 +1,4 @@
+# Keep this directory but ignore its contents
+# This allows the uploads directory to exist in git without tracking uploaded files
+*
+!.gitkeep
