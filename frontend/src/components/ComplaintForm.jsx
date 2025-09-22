@@ -7,7 +7,6 @@ import {
   faMicrophone,
   faPhone,
   faBolt,
-  faComments,
   faPaperPlane,
   faFileUpload,
   faCamera,
@@ -15,23 +14,37 @@ import {
   faStop,
   faCircle,
   faLocationArrow,
-  faSync
+  faSync,
+  faRobot,
+  faSpinner,
+  faCheckCircle
 } from '@fortawesome/free-solid-svg-icons';
 import GoogleMap from "./GoogleMap";
 
 function ComplaintForm({ token, setComplaints, onClose }) {
+  // Basic form states
   const [desc, setDesc] = useState("");
   const [location, setLocation] = useState({ lat: "", lon: "" });
   const [image, setImage] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
   const [phone, setPhone] = useState("");
-  const [priority, setPriority] = useState("Medium");
-  const [reason, setReason] = useState("");
   const [isLocationLoading, setIsLocationLoading] = useState(true);
   const [audio, setAudio] = useState(null);
   const [isRecording, setIsRecording] = useState(false);
   const [audioPreview, setAudioPreview] = useState(null);
   const [recordingTime, setRecordingTime] = useState(0);
+
+  // AI/OCR states - NO automatic analysis
+  const [isAnalyzingImage, setIsAnalyzingImage] = useState(false);
+  const [aiSuggestion, setAiSuggestion] = useState(null);
+  const [extractedText, setExtractedText] = useState("");
+  const [ocrError, setOcrError] = useState(null);
+
+  // Priority calculation states
+  const [priorityInfo, setPriorityInfo] = useState(null);
+  const [isCalculatingPriority, setIsCalculatingPriority] = useState(false);
+  const [priorityError, setPriorityError] = useState(null);
+  
   const fileInputRef = useRef(null);
   const cameraInputRef = useRef(null);
   const audioInputRef = useRef(null);
@@ -44,8 +57,14 @@ function ComplaintForm({ token, setComplaints, onClose }) {
     fetch("http://localhost:5000/user/me", {
       headers: { Authorization: `Bearer ${token}` }
     })
-      .then(res => res.json())
-      .then(data => setPhone(data.phone || ""));
+      .then(res => {
+        if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+        return res.json();
+      })
+      .then(data => setPhone(data.phone || ""))
+      .catch(error => {
+        console.error("Error fetching user phone:", error);
+      });
   }, [token]);
 
   // Get live location
@@ -69,23 +88,91 @@ function ComplaintForm({ token, setComplaints, onClose }) {
     }
   }, []);
 
-  // Handle image selection and preview
+  // Manual Gemini Vision AI analysis - ONLY when button clicked
+  const analyzeImageWithGeminiVision = async () => {
+    if (!image) {
+      alert('Please upload an image first');
+      return;
+    }
+
+    setIsAnalyzingImage(true);
+    setOcrError(null);
+    setAiSuggestion(null);
+    setExtractedText("");
+
+    try {
+      const formData = new FormData();
+      formData.append('image', image);
+
+      console.log('🔍 Calling Gemini Vision API:', 'http://localhost:5000/api/vision-ocr');
+      console.log('📁 Image file:', image.name, image.size);
+
+      const response = await fetch('http://localhost:5000/api/vision-ocr', {
+        method: 'POST',
+        body: formData
+      });
+
+      console.log('📡 Response status:', response.status);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`API error: ${response.status} - ${errorText}`);
+      }
+
+      const result = await response.json();
+      console.log('✅ Gemini Vision Analysis Complete:', result);
+
+      if (result.success) {
+        setExtractedText(result.extractedText || "");
+        setAiSuggestion(result.suggestion);
+        
+        // Automatically fill description with Gemini-generated description
+        if (result.suggestion) {
+          setDesc(result.suggestion);
+        }
+        
+        if (result.error) {
+          setOcrError(result.error);
+        }
+      } else {
+        throw new Error(result.error || 'Gemini Vision analysis failed');
+      }
+
+    } catch (error) {
+      console.error('❌ Gemini Vision Error:', error);
+      setOcrError(error.message);
+      
+      // Simple fallback for network errors
+      const fallbackDesc = `Civic infrastructure issue detected from uploaded image "${image.name}". Please describe the specific problem you're reporting in detail.`;
+      setDesc(fallbackDesc);
+    } finally {
+      setIsAnalyzingImage(false);
+    }
+  };
+
+  // Handle image selection - NO automatic analysis
   const handleImageChange = (e) => {
     const file = e.target.files[0];
     if (file) {
       setImage(file);
       const reader = new FileReader();
-      reader.onload = (e) => {
-        setImagePreview(e.target.result);
-      };
+      reader.onload = (e) => setImagePreview(e.target.result);
       reader.readAsDataURL(file);
+      
+      // Clear previous AI results when new image is uploaded
+      setAiSuggestion(null);
+      setExtractedText("");
+      setOcrError(null);
     }
   };
 
-  // Clear image selection
+  // Clear image and reset AI states
   const clearImage = () => {
     setImage(null);
     setImagePreview(null);
+    setAiSuggestion(null);
+    setExtractedText("");
+    setOcrError(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
     if (cameraInputRef.current) cameraInputRef.current.value = "";
   };
@@ -107,8 +194,6 @@ function ComplaintForm({ token, setComplaints, onClose }) {
         const audioUrl = URL.createObjectURL(audioBlob);
         setAudioPreview(audioUrl);
         setAudio(audioBlob);
-        
-        // Stop all tracks to release microphone
         stream.getTracks().forEach(track => track.stop());
       };
 
@@ -116,7 +201,6 @@ function ComplaintForm({ token, setComplaints, onClose }) {
       setIsRecording(true);
       setRecordingTime(0);
 
-      // Start timer
       recordingIntervalRef.current = setInterval(() => {
         setRecordingTime(prev => prev + 1);
       }, 1000);
@@ -154,11 +238,56 @@ function ComplaintForm({ token, setComplaints, onClose }) {
     }
   };
 
-  // Format recording time
   const formatTime = (seconds) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  // Calculate priority for preview
+  const calculatePriority = async () => {
+    if (!location.lat || !location.lon) {
+      alert("Location is required for priority calculation. Please select a location on the map or enable location access.");
+      return;
+    }
+
+    setIsCalculatingPriority(true);
+    setPriorityError(null);
+    setPriorityInfo(null);
+
+    try {
+      const response = await fetch("http://localhost:5000/complaints/calculate-priority", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          lat: location.lat,
+          lon: location.lon,
+          issueType: 'general',
+          category: 'civic'
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      
+      if (data.success) {
+        setPriorityInfo(data);
+      } else {
+        throw new Error(data.error || 'Priority calculation failed');
+      }
+      
+    } catch (error) {
+      console.error("Priority calculation error:", error);
+      setPriorityError(error.message);
+    } finally {
+      setIsCalculatingPriority(false);
+    }
   };
 
   const handleSubmit = async () => {
@@ -188,8 +317,14 @@ function ComplaintForm({ token, setComplaints, onClose }) {
     formData.append("lat", location.lat);
     formData.append("lon", location.lon);
     formData.append("phone", phone);
-    formData.append("priority", priority);
-    formData.append("reason", reason);
+
+    // Add AI analysis results if available
+    if (extractedText) {
+      formData.append("extractedText", extractedText);
+    }
+    if (aiSuggestion) {
+      formData.append("aiAnalysis", aiSuggestion);
+    }
 
     if (image) formData.append("image", image);
     if (audio) formData.append("audio", audio);
@@ -201,26 +336,46 @@ function ComplaintForm({ token, setComplaints, onClose }) {
         body: formData
       });
 
+      if (!res.ok) {
+        throw new Error(`HTTP error! status: ${res.status}`);
+      }
+
       const data = await res.json();
       setComplaints((prev) => [data.complaint, ...prev]);
 
-      // Reset fields
+      // Show success message
+      let message = "✅ Complaint submitted successfully!\n\n";
+      
+      if (aiSuggestion) {
+        message += `🤖 AI Analysis Used: ${aiSuggestion.substring(0, 100)}...\n\n`;
+      }
+      
+      message += `📍 Location: ${location.lat.toFixed(6)}, ${location.lon.toFixed(6)}\n`;
+      
+      if (priorityInfo) {
+        message += `⚡ Priority: ${priorityInfo.priority} ${priorityInfo.icon}`;
+      }
+
+      // Reset all form fields
       setDesc("");
       setImage(null);
       setImagePreview(null);
       setAudio(null);
       setAudioPreview(null);
       setRecordingTime(0);
-      setReason("");
+      setPriorityInfo(null);
+      setPriorityError(null);
+      setAiSuggestion(null);
+      setExtractedText("");
+      setOcrError(null);
       
       // Clear file inputs
       if (fileInputRef.current) fileInputRef.current.value = "";
       if (cameraInputRef.current) cameraInputRef.current.value = "";
       if (audioInputRef.current) audioInputRef.current.value = "";
 
-      alert("Complaint submitted successfully!");
+      alert(message);
       
-      // Close modal if onClose function is provided
       if (onClose) {
         onClose();
       }
@@ -232,6 +387,8 @@ function ComplaintForm({ token, setComplaints, onClose }) {
 
   const handleLocationUpdate = (newLocation) => {
     setLocation(newLocation);
+    setPriorityInfo(null);
+    setPriorityError(null);
   };
 
   const getCurrentLocation = () => {
@@ -243,6 +400,8 @@ function ComplaintForm({ token, setComplaints, onClose }) {
             lat: pos.coords.latitude,
             lon: pos.coords.longitude,
           });
+          setPriorityInfo(null);
+          setPriorityError(null);
           setIsLocationLoading(false);
         },
         (error) => {
@@ -266,6 +425,10 @@ function ComplaintForm({ token, setComplaints, onClose }) {
             0% { transform: scale(1); }
             50% { transform: scale(1.05); }
             100% { transform: scale(1); }
+          }
+          @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
           }
           .form-section {
             background: #ffffff;
@@ -338,19 +501,48 @@ function ComplaintForm({ token, setComplaints, onClose }) {
           .button-secondary:hover:not(:disabled) {
             background: #e5e7eb;
           }
-          .button-success {
-            background: #10b981;
+          .ai-predict-button {
+            background: linear-gradient(45deg, #10b981, #059669);
             color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 10px 16px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
           }
-          .button-success:hover:not(:disabled) {
-            background: #059669;
+          .ai-predict-button:hover:not(:disabled) {
+            background: linear-gradient(45deg, #059669, #047857);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
           }
-          .button-danger {
-            background: #ef4444;
-            color: white;
+          .ai-predict-button:disabled {
+            background: #9ca3af;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
           }
-          .button-danger:hover:not(:disabled) {
-            background: #dc2626;
+          .ai-success-card {
+            background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);
+            border: 2px solid #bbf7d0;
+            border-radius: 12px;
+            padding: 16px;
+            margin-top: 12px;
+            position: relative;
+            overflow: hidden;
+          }
+          .ai-success-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, #10b981, #059669);
           }
         `}
       </style>
@@ -362,7 +554,7 @@ function ComplaintForm({ token, setComplaints, onClose }) {
       }}>
         {/* Header */}
         <div className="form-section">
-          <div style={{ textAlign: "center", marginBottom: "px" }}>
+          <div style={{ textAlign: "center", marginBottom: "0px" }}>
             <FontAwesomeIcon icon={faEdit} style={{ fontSize: "32px", color: "#3b82f6", marginBottom: "12px" }} />
             <h2 style={{ margin: "0", color: "#1f2937", fontSize: "28px", fontWeight: "700" }}>
               Submit Complaint
@@ -434,9 +626,7 @@ function ComplaintForm({ token, setComplaints, onClose }) {
                 fontSize: "13px",
                 color: "#1e40af"
               }}>
-                <strong>📍 Coordinates:</strong> {location.lat.toFixed(6)}, {location.lon.toFixed(6)}
-                <br />
-                <small style={{ color: "#6b7280" }}>💡 Drag the map to move around - the pin shows the center location</small>
+                <strong><FontAwesomeIcon icon={faMapMarkerAlt} /> Coordinates:</strong> {parseFloat(location.lat).toFixed(6)}, {parseFloat(location.lon).toFixed(6)}
               </div>
             </>
           ) : (
@@ -461,32 +651,7 @@ function ComplaintForm({ token, setComplaints, onClose }) {
           )}
         </div>
 
-        {/* Description Section */}
-        <div className="form-section">
-          <div className="input-group">
-            <div className="input-label">
-              <FontAwesomeIcon icon={faEdit} style={{ color: "#3b82f6" }} />
-              <span>Description *</span>
-            </div>
-            <textarea
-              placeholder="Describe your complaint in detail. Include what happened, when it occurred, and any other relevant information..."
-              value={desc}
-              onChange={(e) => setDesc(e.target.value)}
-              className="input-field"
-              style={{
-                minHeight: "120px",
-                resize: "vertical",
-                fontFamily: "inherit"
-              }}
-              required
-            />
-            <div style={{ fontSize: "12px", color: "#6b7280", marginTop: "4px" }}>
-              {desc.length}/500 characters
-            </div>
-          </div>
-        </div>
-
-        {/* Image Upload Section */}
+        {/* Simple Image Section */}
         <div className="form-section">
           <div className="input-label">
             <FontAwesomeIcon icon={faImage} style={{ color: "#3b82f6" }} />
@@ -540,6 +705,7 @@ function ComplaintForm({ token, setComplaints, onClose }) {
             )}
           </div>
 
+          {/* Image Preview */}
           {imagePreview && (
             <div style={{ 
               padding: "16px",
@@ -564,6 +730,86 @@ function ComplaintForm({ token, setComplaints, onClose }) {
               />
             </div>
           )}
+        </div>
+
+        {/* Description Section with Manual AI Button */}
+        <div className="form-section">
+          <div className="input-group">
+            <div className="input-label">
+              <FontAwesomeIcon icon={faEdit} style={{ color: "#3b82f6" }} />
+              <span>Description *</span>
+            </div>
+            <textarea
+              placeholder="Describe your complaint in detail. Include what happened, when it occurred, and any other relevant information..."
+              value={desc}
+              onChange={(e) => setDesc(e.target.value)}
+              className="input-field"
+              style={{
+                minHeight: "120px",
+                resize: "vertical",
+                fontFamily: "inherit",
+                backgroundColor: aiSuggestion ? "#f0f9ff" : "#ffffff",
+                border: aiSuggestion ? "2px solid #bfdbfe" : "1px solid #d1d5db"
+              }}
+              required
+            />
+            <div style={{ 
+              fontSize: "12px", 
+              color: "#6b7280", 
+              marginTop: "4px",
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center"
+            }}>
+              <span>{desc.length}/1000 characters</span>
+              
+              {/* PREDICT WITH AI BUTTON */}
+              <button
+                type="button"
+                onClick={analyzeImageWithGeminiVision}
+                disabled={!image || isAnalyzingImage}
+                className="ai-predict-button"
+              >
+                {isAnalyzingImage ? (
+                  <>
+                    <FontAwesomeIcon icon={faSpinner} style={{animation: "spin 1s linear infinite"}} />
+                    Gemini Analyzing...
+                  </>
+                ) : (
+                  <>
+                    <FontAwesomeIcon icon={faRobot} />
+                    Predict With AI
+                  </>
+                )}
+              </button>
+            </div>
+
+            {/* AI Success Card - Shows Gemini analysis results */}
+            {aiSuggestion && !isAnalyzingImage && (
+              <div className="ai-success-card">
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
+                  <FontAwesomeIcon icon={faCheckCircle} style={{ color: "#10b981", fontSize: "16px" }} />
+                  <span style={{ fontSize: "14px", fontWeight: "600", color: "#065f46" }}>Gemini Vision Analysis Complete</span>
+                </div>
+                
+                <div style={{ fontSize: "13px", color: "#047857", marginBottom: "8px" }}>
+                  🤖 AI-generated description applied to form
+                </div>
+
+                {ocrError && (
+                  <div style={{ 
+                    fontSize: "12px", 
+                    color: "#dc2626",
+                    backgroundColor: "rgba(239, 68, 68, 0.1)",
+                    padding: "4px 8px",
+                    borderRadius: "4px"
+                  }}>
+                    ⚠️ {ocrError}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Voice Message Section */}
@@ -687,51 +933,111 @@ function ComplaintForm({ token, setComplaints, onClose }) {
               onChange={(e) => setPhone(e.target.value)}
               className="input-field"
             />
-            <div style={{ fontSize: "12px", color: "#6b7280", marginTop: "4px" }}>
-              📋 This will be fetched from your profile but you can edit it here
-            </div>
           </div>
         </div>
 
-        {/* Priority and Details */}
+        {/* Priority Calculation Section */}
         <div className="form-section">
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))", gap: "20px" }}>
-            <div className="input-group">
-              <div className="input-label">
-                <FontAwesomeIcon icon={faBolt} style={{ color: "#f59e0b" }} />
-                <span>Priority Level</span>
-                <span style={{ fontSize: "12px", color: "#6b7280", fontWeight: "normal" }}>(Optional)</span>
-              </div>
-              <select 
-                value={priority} 
-                onChange={(e) => setPriority(e.target.value)}
-                className="input-field"
-                style={{ cursor: "pointer" }}
-              >
-                <option value="High">🔴 High Priority</option>
-                <option value="Medium">🟡 Medium Priority</option>
-                <option value="Low">🟢 Low Priority</option>
-              </select>
+          <div className="input-group">
+            <div className="input-label">
+              <FontAwesomeIcon icon={faBolt} style={{ color: "#10b981" }} />
+              <span>Priority Calculation</span>
             </div>
+            
+            <button
+              type="button"
+              onClick={calculatePriority}
+              disabled={!location.lat || !location.lon || isCalculatingPriority}
+              className="button"
+              style={{
+                width: "100%",
+                padding: "12px 20px",
+                marginBottom: "15px",
+                backgroundColor: (!location.lat || !location.lon || isCalculatingPriority) ? "#9ca3af" : "#10b981",
+                color: "white",
+                border: "none",
+                borderRadius: "6px",
+                fontSize: "14px",
+                fontWeight: "600",
+                cursor: (!location.lat || !location.lon || isCalculatingPriority) ? "not-allowed" : "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "8px"
+              }}
+            >
+              {isCalculatingPriority ? (
+                <>
+                  <FontAwesomeIcon icon={faSync} className="fa-spin" />
+                  Calculating Priority...
+                </>
+              ) : (
+                <>
+                  <FontAwesomeIcon icon={faBolt} />
+                  Calculate Priority for Map Location
+                </>
+              )}
+            </button>
 
-            <div className="input-group">
-              <div className="input-label">
-                <FontAwesomeIcon icon={faComments} style={{ color: "#3b82f6" }} />
-                <span>Reason for Priority</span>
-                <span style={{ fontSize: "12px", color: "#6b7280", fontWeight: "normal" }}>(Optional)</span>
+            {priorityInfo && (
+              <div style={{ 
+                padding: "16px", 
+                backgroundColor: priorityInfo.priority === 'High' ? '#fee2e2' : priorityInfo.priority === 'Medium' ? '#fef3c7' : '#dcfce7',
+                border: `2px solid ${priorityInfo.color}`,
+                borderRadius: "8px",
+                marginBottom: "10px"
+              }}>
+                <div style={{ 
+                  display: "flex", 
+                  alignItems: "center", 
+                  marginBottom: "8px",
+                  fontSize: "16px",
+                  fontWeight: "600",
+                  color: priorityInfo.color
+                }}>
+                  <span style={{ fontSize: "20px", marginRight: "8px" }}>{priorityInfo.icon}</span>
+                  Priority: {priorityInfo.priority}
+                </div>
+                
+                <div style={{ 
+                  fontSize: "14px", 
+                  color: "#374151", 
+                  marginBottom: "8px",
+                  lineHeight: "1.4"
+                }}>
+                  <strong>Reason:</strong> {priorityInfo.priorityReason}
+                </div>
+                
+                {priorityInfo.areaName && (
+                  <div style={{ 
+                    fontSize: "12px", 
+                    color: "#6b7280", 
+                    marginBottom: "4px" 
+                  }}>
+                    <strong>Area:</strong> {priorityInfo.areaName}
+                  </div>
+                )}
               </div>
-              <input
-                placeholder="Explain why this priority level is appropriate..."
-                value={reason}
-                onChange={(e) => setReason(e.target.value)}
-                className="input-field"
-              />
-            </div>
+            )}
+
+            {priorityError && (
+              <div style={{ 
+                padding: "12px 16px", 
+                backgroundColor: "#fee2e2", 
+                border: "1px solid #fca5a5", 
+                borderRadius: "8px",
+                fontSize: "14px",
+                color: "#dc2626",
+                marginBottom: "10px"
+              }}>
+                ❌ Priority calculation failed: {priorityError}
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Submit Section */}
-        <div className="form-section">
+        {/* Simple Submit Section - NO department info */}
+        <div className="form-section">          
           <button 
             onClick={handleSubmit}
             disabled={!desc.trim() || (!location.lat || !location.lon) || !image || !phone.trim()}
@@ -746,7 +1052,7 @@ function ComplaintForm({ token, setComplaints, onClose }) {
             }}
           >
             <FontAwesomeIcon icon={faPaperPlane} />
-            Submit Complaint
+            Submit
           </button>
         </div>
       </div>

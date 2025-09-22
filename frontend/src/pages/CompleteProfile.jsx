@@ -10,13 +10,15 @@ function CompleteProfile() {
     address: "",
     pincode: "",
     city: "",
-    state: ""
+    state: "",
+    district: ""
   });
   
   const [loading, setLoading] = useState(false);
   const [pincodeLoading, setPincodeLoading] = useState(false);
   const [errors, setErrors] = useState({});
   const [message, setMessage] = useState("");
+  const [manualLocationInput, setManualLocationInput] = useState(false);
 
   // Validation function
   const validateForm = () => {
@@ -30,6 +32,7 @@ function CompleteProfile() {
     else if (!/^\d{6}$/.test(form.pincode)) newErrors.pincode = "Enter valid 6-digit pincode";
     if (!form.city.trim()) newErrors.city = "City is required";
     if (!form.state.trim()) newErrors.state = "State is required";
+    if (!form.district.trim()) newErrors.district = "District is required";
     
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -50,34 +53,45 @@ function CompleteProfile() {
       fetchPincodeData(value);
     } else if (name === "pincode") {
       // Clear city and state if pincode is invalid
-      setForm(prev => ({ ...prev, city: "", state: "" }));
+      setForm(prev => ({ ...prev, city: "", state: "", district: "" }));
+      setManualLocationInput(false);
     }
   };
 
   const fetchPincodeData = async (pincode) => {
     setPincodeLoading(true);
     try {
-      const response = await fetch(`https://api.postalpincode.in/pincode/${pincode}`);
-      if (!response.ok) throw new Error('Network response was not ok');
+      const response = await fetch(`http://localhost:5000/user/pincode/${pincode}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
       
       const data = await response.json();
       
-      if (data[0]?.Status === "Success" && data[0].PostOffice?.length > 0) {
+      if (response.ok && data.success) {
         setForm(prev => ({
           ...prev,
-          city: data[0].PostOffice[0].District || "",
-          state: data[0].PostOffice[0].State || ""
+          city: data.data.city || "",
+          state: data.data.state || "",
+          district: data.data.city || ""
         }));
+        setManualLocationInput(false);
         setMessage("Location details fetched successfully!");
         setTimeout(() => setMessage(""), 3000);
       } else {
-        setForm(prev => ({ ...prev, city: "", state: "" }));
-        setErrors(prev => ({ ...prev, pincode: "Invalid pincode" }));
+        setForm(prev => ({ ...prev, city: "", state: "", district: "" }));
+        setManualLocationInput(true);
+        setErrors(prev => ({ ...prev, pincode: data.error || "Invalid pincode" }));
       }
     } catch (error) {
       console.error("Error fetching pincode data:", error);
-      setForm(prev => ({ ...prev, city: "", state: "" }));
-      setErrors(prev => ({ ...prev, pincode: "Failed to fetch location data" }));
+      // More user-friendly error handling
+      setErrors(prev => ({ ...prev, pincode: "Network error. Please enter city and state manually." }));
+      // Allow manual input
+      setForm(prev => ({ ...prev, city: "", state: "", district: "" }));
+      setManualLocationInput(true);
     } finally {
       setPincodeLoading(false);
     }
@@ -127,7 +141,9 @@ function CompleteProfile() {
   const inputStyle = {
     padding: "8px",
     margin: "5px",
-    border: "1px solid #ccc",
+    borderWidth: "1px",
+    borderStyle: "solid",
+    borderColor: "#ccc",
     borderRadius: "4px",
     width: "200px"
   };
@@ -214,18 +230,31 @@ function CompleteProfile() {
         name="city"
         placeholder="City"
         value={form.city}
-        readOnly
-        style={{...inputStyle, backgroundColor: "#f5f5f5"}}
+        onChange={handleChange}
+        readOnly={!manualLocationInput}
+        style={manualLocationInput ? (errors.city ? errorInputStyle : inputStyle) : {...inputStyle, backgroundColor: "#f5f5f5"}}
       />
       {errors.city && <div style={{ color: "red", fontSize: "12px" }}>{errors.city}</div>}
+      <br />
+
+      <input
+        name="district"
+        placeholder="District"
+        value={form.district}
+        onChange={handleChange}
+        readOnly={!manualLocationInput}
+        style={manualLocationInput ? (errors.district ? errorInputStyle : inputStyle) : {...inputStyle, backgroundColor: "#f5f5f5"}}
+      />
+      {errors.district && <div style={{ color: "red", fontSize: "12px" }}>{errors.district}</div>}
       <br />
 
       <input
         name="state"
         placeholder="State"
         value={form.state}
-        readOnly
-        style={{...inputStyle, backgroundColor: "#f5f5f5"}}
+        onChange={handleChange}
+        readOnly={!manualLocationInput}
+        style={manualLocationInput ? (errors.state ? errorInputStyle : inputStyle) : {...inputStyle, backgroundColor: "#f5f5f5"}}
       />
       {errors.state && <div style={{ color: "red", fontSize: "12px" }}>{errors.state}</div>}
       <br />

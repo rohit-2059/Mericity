@@ -4,6 +4,7 @@ const Complaint = require("../models/Complaint");
 const Admin = require("../models/Admin");
 const auth = require("../middleware/auth"); // your JWT middleware
 const geocodingService = require("../services/geocodingService");
+const departmentDetectionService = require("../services/departmentDetectionService");
 const router = express.Router();
 
 // configure multer storage
@@ -75,8 +76,73 @@ router.post(
       let assignedAdmin = null;
       let assignedCity = locationInfo.city;
       let assignedState = locationInfo.state;
+      let assignedDepartment = null;
+      let departmentRouting = null;
 
-      if (locationInfo.city && locationInfo.city !== "Unknown City") {
+      // Use AI to detect and route complaint to appropriate department
+      try {
+        console.log("Starting AI department detection...");
+
+        const complaintData = {
+          description,
+          category: priority || "General", // Use priority as category hint if available
+          location: {
+            city: locationInfo.city,
+            state: locationInfo.state,
+            district: locationInfo.district,
+          },
+        };
+
+        // Check if department detection service is available
+        if (
+          departmentDetectionService &&
+          typeof departmentDetectionService.routeComplaintToDepartment ===
+            "function"
+        ) {
+          departmentRouting =
+            await departmentDetectionService.routeComplaintToDepartment(
+              complaintData
+            );
+          console.log(
+            "Department routing result:",
+            JSON.stringify(departmentRouting, null, 2)
+          );
+
+          if (
+            departmentRouting.success &&
+            departmentRouting.assignedDepartment
+          ) {
+            assignedDepartment = departmentRouting.assignedDepartment._id;
+            console.log(
+              `Complaint automatically routed to: ${departmentRouting.assignedDepartment.name} (${departmentRouting.assignedDepartment.departmentType})`
+            );
+            console.log(
+              `AI Confidence: ${departmentRouting.confidence}, Reasoning: ${departmentRouting.reasoning}`
+            );
+          } else {
+            console.log(
+              "AI routing failed or returned no department, falling back to admin assignment"
+            );
+          }
+        } else {
+          console.log(
+            "Department detection service not available, falling back to admin assignment"
+          );
+        }
+      } catch (aiError) {
+        console.error("AI department routing failed:", aiError);
+        console.log("Falling back to admin assignment");
+        // Reset variables to prevent partial state
+        departmentRouting = null;
+        assignedDepartment = null;
+      }
+
+      // Fallback to admin assignment if AI routing fails
+      if (
+        !assignedDepartment &&
+        locationInfo.city &&
+        locationInfo.city !== "Unknown City"
+      ) {
         assignedAdmin = await Admin.findOne({
           assignedCity: { $regex: new RegExp(locationInfo.city, "i") },
           assignedState: { $regex: new RegExp(locationInfo.state, "i") },
@@ -121,6 +187,17 @@ router.post(
           country: locationInfo.country,
         },
         assignedAdmin: assignedAdmin ? assignedAdmin._id : null,
+        assignedDepartment: assignedDepartment || null,
+        ...(departmentRouting &&
+          departmentRouting.success && {
+            departmentRouting: {
+              detectedDepartment: departmentRouting.detectedDepartment,
+              confidence: departmentRouting.confidence,
+              reasoning: departmentRouting.reasoning,
+              analysisMethod: departmentRouting.analysis_method,
+              isFallback: departmentRouting.is_fallback || false,
+            },
+          }),
         assignedCity,
         assignedState,
         image: imagePath,
@@ -129,19 +206,80 @@ router.post(
         ...(reason && { reason }), // Only add reason if provided
       });
 
-      await complaint.save();
+      console.log("Attempting to save complaint with data:", {
+        userId: complaint.userId,
+        assignedDepartment: complaint.assignedDepartment,
+        assignedAdmin: complaint.assignedAdmin,
+        hasImage: !!complaint.image,
+        hasAudio: !!complaint.audio,
+        location: complaint.location.city,
+      });
 
-      // Populate admin info in response
-      await complaint.populate(
-        "assignedAdmin",
-        "name email assignedCity assignedState"
-      );
+      await complaint.save();
+      console.log("Complaint saved successfully with ID:", complaint._id);
+
+      // Populate admin and department info in response
+      try {
+        const populationQueries = [];
+
+        if (complaint.assignedAdmin) {
+          populationQueries.push({
+            path: "assignedAdmin",
+            select: "name email assignedCity assignedState",
+          });
+        }
+
+        if (complaint.assignedDepartment) {
+          populationQueries.push({
+            path: "assignedDepartment",
+            select:
+              "name departmentType assignedCity assignedState email contactNumber",
+          });
+        }
+
+        if (populationQueries.length > 0) {
+          await complaint.populate(populationQueries);
+        }
+
+        console.log("Successfully populated complaint references");
+      } catch (populateError) {
+        console.error("Error populating complaint references:", populateError);
+        // Continue without population if it fails
+      }
+
+      // Create response message based on routing result
+      let responseMessage;
+      if (complaint.assignedDepartment) {
+        const dept = complaint.assignedDepartment;
+        responseMessage = `🤖 AI automatically routed complaint to ${
+          dept.name || "Department"
+        } (${dept.departmentType || "Unknown Type"})`;
+        if (departmentRouting && departmentRouting.confidence) {
+          responseMessage += ` with ${Math.round(
+            departmentRouting.confidence * 100
+          )}% confidence`;
+        }
+      } else if (complaint.assignedAdmin) {
+        const admin = complaint.assignedAdmin;
+        responseMessage = `Complaint assigned to ${
+          admin.name || "Admin"
+        } (${assignedCity} Admin)`;
+      } else {
+        responseMessage = `Complaint created but no department or admin found for ${assignedCity}, ${assignedState}`;
+      }
 
       res.json({
         complaint,
-        message: assignedAdmin
-          ? `Complaint assigned to ${assignedAdmin.name} (${assignedCity} Admin)`
-          : `Complaint created but no admin found for ${assignedCity}, ${assignedState}`,
+        message: responseMessage,
+        routing: departmentRouting
+          ? {
+              method: departmentRouting.analysis_method,
+              confidence: departmentRouting.confidence,
+              reasoning: departmentRouting.reasoning,
+              detectedDepartment: departmentRouting.detectedDepartment,
+              isFallback: departmentRouting.is_fallback,
+            }
+          : null,
       });
     } catch (err) {
       console.error(err);
@@ -149,6 +287,155 @@ router.post(
     }
   }
 );
+
+// Calculate priority for a complaint based on location
+router.post("/calculate-priority", auth, async (req, res) => {
+  try {
+    const { lat, lon, issueType = "general", category = "civic" } = req.body;
+
+    if (!lat || !lon) {
+      return res.status(400).json({
+        success: false,
+        error: "Missing required parameters: lat and lon",
+      });
+    }
+
+    // Import the priority calculation logic
+    const axios = require("axios");
+    const GOOGLE_MAPS_API_KEY = process.env.GOOGLE_MAPS_API_KEY;
+
+    let priority = "Medium";
+    let reason = "General complaint.";
+    let highPriorityReason = null;
+    let highPriorityPlaceName = null;
+    let isHighPriorityArea = false;
+    let areaName = "the surrounding area";
+
+    if (issueType === "colony-work") {
+      priority = "Low";
+      reason = "Minor residential issue.";
+    }
+
+    // Check for critical places nearby
+    const criticalTerms = [
+      "hospital",
+      "school",
+      "police station",
+      "bus station",
+      "airport",
+      "temple",
+      "tourist attraction",
+      "landmark",
+    ];
+
+    for (const term of criticalTerms) {
+      const url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${lat},${lon}&radius=500&keyword=${encodeURIComponent(
+        term
+      )}&key=${GOOGLE_MAPS_API_KEY}`;
+      try {
+        const response = await axios.get(url);
+
+        if (response.data.results.length > 0) {
+          highPriorityReason = `a key public service (${term})`;
+          highPriorityPlaceName = response.data.results[0].name;
+          isHighPriorityArea = true;
+          break; // Stop after the first match
+        }
+      } catch (error) {
+        console.error(`Error checking for ${term}:`, error.message);
+      }
+    }
+
+    if (isHighPriorityArea) {
+      priority = "High";
+    }
+
+    // Check for high traffic (only if priority isn't already high)
+    if (priority !== "High") {
+      try {
+        const destinationLat = parseFloat(lat) + 0.005;
+        const destinationLng = parseFloat(lon) + 0.005;
+
+        const trafficUrl = `https://maps.googleapis.com/maps/api/directions/json?origin=${lat},${lon}&destination=${destinationLat},${destinationLng}&key=${GOOGLE_MAPS_API_KEY}&mode=driving&traffic_model=best_guess&departure_time=now`;
+        const noTrafficUrl = `https://maps.googleapis.com/maps/api/directions/json?origin=${lat},${lon}&destination=${destinationLat},${destinationLng}&key=${GOOGLE_MAPS_API_KEY}&mode=driving`;
+
+        const [trafficResponse, noTrafficResponse] = await Promise.all([
+          axios.get(trafficUrl),
+          axios.get(noTrafficUrl),
+        ]);
+
+        const trafficDuration =
+          trafficResponse.data.routes[0]?.legs[0]?.duration_in_traffic?.value;
+        const noTrafficDuration =
+          noTrafficResponse.data.routes[0]?.legs[0]?.duration?.value;
+
+        if (trafficDuration && noTrafficDuration) {
+          const trafficDifference =
+            (trafficDuration - noTrafficDuration) / noTrafficDuration;
+
+          if (trafficDifference > 0.25) {
+            priority = "High";
+            highPriorityReason = "high traffic";
+            highPriorityPlaceName = "the surrounding roads";
+          }
+        }
+      } catch (error) {
+        console.error("Traffic check error:", error.message);
+      }
+    }
+
+    // Get area name from geocoding
+    try {
+      const geocodeUrl = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lon}&key=${GOOGLE_MAPS_API_KEY}`;
+      const geocodeResponse = await axios.get(geocodeUrl);
+      const addressComponents =
+        geocodeResponse.data.results[0]?.address_components;
+
+      if (addressComponents) {
+        const locality = addressComponents.find((comp) =>
+          comp.types.includes("locality")
+        )?.long_name;
+        if (locality) {
+          areaName = locality;
+        }
+      }
+    } catch (error) {
+      console.error("Geocoding error:", error.message);
+    }
+
+    // Final message construction
+    let finalMessage;
+    if (priority === "High") {
+      if (isHighPriorityArea) {
+        finalMessage = `Priority set to: High. Reason: The issue is located near ${highPriorityReason}. The identified place is ${highPriorityPlaceName}.`;
+      } else {
+        finalMessage = `Priority set to: High. Reason: The area is experiencing ${highPriorityReason}.`;
+      }
+    } else if (priority === "Medium") {
+      finalMessage = `Priority set to: Medium. Reason: ${reason} in ${areaName}.`;
+    } else {
+      finalMessage = `Priority set to: Low. Reason: ${reason} in ${areaName}.`;
+    }
+
+    res.json({
+      success: true,
+      message: finalMessage,
+      priority: priority,
+      coordinates: { latitude: lat, longitude: lon },
+      issue: issueType,
+      areaName: areaName,
+      highPriorityPlace: highPriorityPlaceName,
+      reasoning: finalMessage,
+    });
+  } catch (error) {
+    console.error("Priority calculation error:", error);
+    res.status(500).json({
+      success: false,
+      error: "Failed to calculate priority",
+      details: error.message,
+    });
+  }
+});
 
 // Get all complaints for a user
 router.get("/", auth, async (req, res) => {
@@ -175,10 +462,12 @@ router.get("/", auth, async (req, res) => {
   }
 });
 
-// Get all pending complaints for explore (from all users)
+// Get all open complaints for explore (pending and in_progress from all users)
 router.get("/explore", auth, async (req, res) => {
   try {
-    const complaints = await Complaint.find({ status: "pending" })
+    const complaints = await Complaint.find({ 
+      status: { $in: ["pending", "in_progress"] } // Show both pending and in_progress complaints
+    })
       .sort({ createdAt: -1 })
       .populate("userId", "name email"); // Populate user info but keep it anonymous
 
@@ -200,6 +489,309 @@ router.get("/explore", auth, async (req, res) => {
     res.json({ complaints: complaintsWithUrls });
   } catch (err) {
     console.error(err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// Community routes
+
+// Get community complaints (all non-closed complaints from user's city)
+router.get("/community", auth, async (req, res) => {
+  try {
+    // Get user's city and state from their profile
+    const User = require("../models/User");
+    const user = await User.findById(req.user.id);
+
+    if (!user || !user.city) {
+      return res.status(400).json({
+        error:
+          "Please complete your profile with city information to view community complaints",
+      });
+    }
+
+    // Extract query parameters for filtering
+    const {
+      sortBy = "latest",
+      voteFilter = "all",
+      locationFilter = "all",
+      minUpvotes,
+      minDownvotes,
+    } = req.query;
+
+    // Build base query
+    let baseQuery = {
+      "location.city": { $regex: new RegExp(`^${user.city}$`, "i") },
+      status: { $ne: "resolved" }, // Get pending and in_progress complaints
+    };
+
+    // Apply location filter
+    if (locationFilter === "same-area" && user.sublocality) {
+      baseQuery["location.sublocality"] = {
+        $regex: new RegExp(`^${user.sublocality}$`, "i"),
+      };
+    }
+
+    // Find all complaints matching base criteria
+    let complaints = await Complaint.find(baseQuery)
+      .populate("userId", "name")
+      .populate("comments.userId", "name");
+
+    // Add full URLs and calculate vote counts
+    let complaintsWithUrls = complaints.map((complaint) => ({
+      ...complaint.toObject(),
+      imageUrl: complaint.image
+        ? `${req.protocol}://${req.get("host")}/${complaint.image}`
+        : null,
+      audioUrl: complaint.audio
+        ? `${req.protocol}://${req.get("host")}/${complaint.audio}`
+        : null,
+      upvoteCount: complaint.upvotes.length,
+      downvoteCount: complaint.downvotes.length,
+      hasUserUpvoted: complaint.upvotes.includes(req.user.id),
+      hasUserDownvoted: complaint.downvotes.includes(req.user.id),
+      isOwnComplaint: complaint.userId._id.toString() === req.user.id,
+    }));
+
+    // Apply vote filtering
+    if (voteFilter === "upvoted-only") {
+      complaintsWithUrls = complaintsWithUrls.filter((c) => c.upvoteCount > 0);
+    } else if (voteFilter === "downvoted-only") {
+      complaintsWithUrls = complaintsWithUrls.filter(
+        (c) => c.downvoteCount > 0
+      );
+    } else if (voteFilter === "no-votes") {
+      complaintsWithUrls = complaintsWithUrls.filter(
+        (c) => c.upvoteCount === 0 && c.downvoteCount === 0
+      );
+    }
+
+    // Apply minimum vote thresholds if specified
+    if (minUpvotes && !isNaN(parseInt(minUpvotes))) {
+      complaintsWithUrls = complaintsWithUrls.filter(
+        (c) => c.upvoteCount >= parseInt(minUpvotes)
+      );
+    }
+    if (minDownvotes && !isNaN(parseInt(minDownvotes))) {
+      complaintsWithUrls = complaintsWithUrls.filter(
+        (c) => c.downvoteCount >= parseInt(minDownvotes)
+      );
+    }
+
+    // Apply sorting
+    complaintsWithUrls.sort((a, b) => {
+      switch (sortBy) {
+        case "oldest":
+          return new Date(a.createdAt) - new Date(b.createdAt);
+        case "most-upvoted":
+          return b.upvoteCount - a.upvoteCount;
+        case "most-downvoted":
+          return b.downvoteCount - a.downvoteCount;
+        case "most-discussed":
+          return (b.comments?.length || 0) - (a.comments?.length || 0);
+        case "latest":
+        default:
+          return new Date(b.createdAt) - new Date(a.createdAt);
+      }
+    });
+
+    res.json({
+      complaints: complaintsWithUrls,
+      userCity: user.city,
+      userState: user.state,
+      filters: {
+        sortBy,
+        voteFilter,
+        locationFilter,
+        applied:
+          sortBy !== "latest" ||
+          voteFilter !== "all" ||
+          locationFilter !== "all",
+      },
+      stats: {
+        total: complaints.length,
+        filtered: complaintsWithUrls.length,
+        upvoted: complaintsWithUrls.filter((c) => c.upvoteCount > 0).length,
+        downvoted: complaintsWithUrls.filter((c) => c.downvoteCount > 0).length,
+        noVotes: complaintsWithUrls.filter(
+          (c) => c.upvoteCount === 0 && c.downvoteCount === 0
+        ).length,
+      },
+    });
+  } catch (err) {
+    console.error("Community complaints error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// Upvote a complaint
+router.post("/:id/upvote", auth, async (req, res) => {
+  try {
+    const complaintId = req.params.id;
+    const userId = req.user.id;
+
+    const complaint = await Complaint.findById(complaintId);
+    if (!complaint) {
+      return res.status(404).json({ error: "Complaint not found" });
+    }
+
+    // Check if user already upvoted
+    const hasUpvoted = complaint.upvotes.includes(userId);
+    const hasDownvoted = complaint.downvotes.includes(userId);
+
+    if (hasUpvoted) {
+      // Remove upvote
+      complaint.upvotes = complaint.upvotes.filter(
+        (id) => id.toString() !== userId
+      );
+    } else {
+      // Add upvote and remove downvote if exists
+      if (hasDownvoted) {
+        complaint.downvotes = complaint.downvotes.filter(
+          (id) => id.toString() !== userId
+        );
+      }
+      complaint.upvotes.push(userId);
+    }
+
+    await complaint.save();
+
+    res.json({
+      upvoteCount: complaint.upvotes.length,
+      downvoteCount: complaint.downvotes.length,
+      hasUserUpvoted: complaint.upvotes.includes(userId),
+      hasUserDownvoted: complaint.downvotes.includes(userId),
+    });
+  } catch (err) {
+    console.error("Upvote error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// Downvote a complaint
+router.post("/:id/downvote", auth, async (req, res) => {
+  try {
+    const complaintId = req.params.id;
+    const userId = req.user.id;
+
+    const complaint = await Complaint.findById(complaintId);
+    if (!complaint) {
+      return res.status(404).json({ error: "Complaint not found" });
+    }
+
+    // Check if user already downvoted
+    const hasUpvoted = complaint.upvotes.includes(userId);
+    const hasDownvoted = complaint.downvotes.includes(userId);
+
+    if (hasDownvoted) {
+      // Remove downvote
+      complaint.downvotes = complaint.downvotes.filter(
+        (id) => id.toString() !== userId
+      );
+    } else {
+      // Add downvote and remove upvote if exists
+      if (hasUpvoted) {
+        complaint.upvotes = complaint.upvotes.filter(
+          (id) => id.toString() !== userId
+        );
+      }
+      complaint.downvotes.push(userId);
+    }
+
+    await complaint.save();
+
+    res.json({
+      upvoteCount: complaint.upvotes.length,
+      downvoteCount: complaint.downvotes.length,
+      hasUserUpvoted: complaint.upvotes.includes(userId),
+      hasUserDownvoted: complaint.downvotes.includes(userId),
+    });
+  } catch (err) {
+    console.error("Downvote error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// Add comment to a complaint
+router.post("/:id/comment", auth, async (req, res) => {
+  try {
+    const complaintId = req.params.id;
+    const { text } = req.body;
+    const userId = req.user.id;
+
+    if (!text || text.trim().length === 0) {
+      return res.status(400).json({ error: "Comment text is required" });
+    }
+
+    if (text.length > 500) {
+      return res
+        .status(400)
+        .json({ error: "Comment must be less than 500 characters" });
+    }
+
+    const complaint = await Complaint.findById(complaintId);
+    if (!complaint) {
+      return res.status(404).json({ error: "Complaint not found" });
+    }
+
+    const newComment = {
+      userId: userId,
+      text: text.trim(),
+      createdAt: new Date(),
+    };
+
+    complaint.comments.push(newComment);
+    await complaint.save();
+
+    // Populate the newly added comment
+    await complaint.populate("comments.userId", "name");
+
+    // Get the newly added comment with user info
+    const addedComment = complaint.comments[complaint.comments.length - 1];
+
+    res.json({
+      message: "Comment added successfully",
+      comment: addedComment,
+      commentCount: complaint.comments.length,
+    });
+  } catch (err) {
+    console.error("Add comment error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// Delete comment (only by comment author)
+router.delete("/:id/comment/:commentId", auth, async (req, res) => {
+  try {
+    const complaintId = req.params.id;
+    const commentId = req.params.commentId;
+    const userId = req.user.id;
+
+    const complaint = await Complaint.findById(complaintId);
+    if (!complaint) {
+      return res.status(404).json({ error: "Complaint not found" });
+    }
+
+    const comment = complaint.comments.id(commentId);
+    if (!comment) {
+      return res.status(404).json({ error: "Comment not found" });
+    }
+
+    // Check if user is the author of the comment
+    if (comment.userId.toString() !== userId) {
+      return res
+        .status(403)
+        .json({ error: "You can only delete your own comments" });
+    }
+
+    comment.remove();
+    await complaint.save();
+
+    res.json({
+      message: "Comment deleted successfully",
+      commentCount: complaint.comments.length,
+    });
+  } catch (err) {
+    console.error("Delete comment error:", err);
     res.status(500).json({ error: "Server error" });
   }
 });
@@ -257,14 +849,16 @@ router.get("/admin/my-city", async (req, res) => {
       return res.status(404).json({ error: "Admin not found" });
     }
 
-    // Get complaints for this admin's city
+    // Get ALL complaints for this admin's city (including those assigned to departments)
     const complaints = await Complaint.find({
-      assignedAdmin: admin._id,
+      "location.city": { $regex: new RegExp(`^${admin.assignedCity}$`, "i") },
+      "location.state": { $regex: new RegExp(`^${admin.assignedState}$`, "i") },
     })
       .populate("userId", "name email")
+      .populate("assignedDepartment", "name departmentType")
       .sort({ createdAt: -1 });
 
-    // Add full URLs for images and audio
+    // Add full URLs for images and audio, plus canManage property and assignment info
     const complaintsWithUrls = complaints.map((complaint) => ({
       ...complaint.toObject(),
       imageUrl: complaint.image
@@ -273,6 +867,9 @@ router.get("/admin/my-city", async (req, res) => {
       audioUrl: complaint.audio
         ? `http://localhost:5000/${complaint.audio}`
         : null,
+      canManage: !complaint.assignedDepartment, // Admin can only manage complaints NOT assigned to departments
+      assignmentType: complaint.assignedDepartment ? 'department' : 'unassigned',
+      assignedDepartmentId: complaint.assignedDepartment || null,
     }));
 
     res.json({
@@ -322,21 +919,70 @@ router.put("/admin/:id/status", async (req, res) => {
       return res.status(404).json({ error: "Admin not found" });
     }
 
-    // Find and update complaint (only if assigned to this admin)
+    // Find and update complaint (only if it's in admin's city AND not assigned to a department)
     const complaint = await Complaint.findOne({
       _id: complaintId,
-      assignedAdmin: admin._id,
+      "location.city": { $regex: new RegExp(`^${admin.assignedCity}$`, "i") },
+      "location.state": { $regex: new RegExp(`^${admin.assignedState}$`, "i") },
+      assignedDepartment: null, // Admin can only manage complaints NOT assigned to departments
     });
 
     if (!complaint) {
       return res
         .status(404)
-        .json({ error: "Complaint not found or not assigned to you" });
+        .json({ error: "Complaint not found, not in your city, or already assigned to a department" });
     }
+
+    // Store old status for notifications
+    const oldStatus = complaint.status;
+    const shouldAwardPoints =
+      oldStatus === "pending" && status === "in_progress";
+
+    // Check if status is actually changing
+    const statusChanged = oldStatus !== status;
 
     complaint.status = status;
     complaint.updatedAt = new Date();
     await complaint.save();
+
+    // Send notifications if status changed to in_progress or resolved
+    if (statusChanged && (status === "in_progress" || status === "resolved")) {
+      const notificationService = require("../services/notificationService");
+      await notificationService.sendStatusUpdateNotification(
+        complaint,
+        oldStatus,
+        status,
+        admin.name
+      );
+    }
+
+    // Award points to user if complaint status changes from pending to in_progress
+    if (shouldAwardPoints) {
+      const User = require("../models/User");
+      const user = await User.findById(complaint.userId);
+
+      if (user) {
+        // Award 5 points
+        user.points = (user.points || 0) + 5;
+
+        // Add to points history
+        if (!user.pointsHistory) {
+          user.pointsHistory = [];
+        }
+        user.pointsHistory.push({
+          points: 5,
+          reason: "Complaint status changed from pending to in-progress",
+          complaintId: complaint._id,
+          awardedAt: new Date(),
+        });
+
+        await user.save();
+
+        console.log(
+          `Awarded 5 points to user ${user.name} (${user.email}) for complaint ${complaint._id}`
+        );
+      }
+    }
 
     res.json({
       message: "Complaint status updated successfully",
@@ -345,86 +991,12 @@ router.put("/admin/:id/status", async (req, res) => {
         status: complaint.status,
         updatedAt: complaint.updatedAt,
       },
+      pointsAwarded: shouldAwardPoints ? 5 : 0,
+      notificationSent:
+        statusChanged && (status === "in_progress" || status === "resolved"),
     });
   } catch (error) {
     console.error("Update complaint status error:", error);
-    res.status(500).json({ error: "Server error" });
-  }
-});
-
-// Admin: Get complaints for admin's city
-router.get("/admin/my-city", async (req, res) => {
-  try {
-    const token = req.headers.authorization?.split(" ")[1];
-    if (!token) {
-      return res.status(401).json({ error: "No token provided" });
-    }
-
-    const jwt = require("jsonwebtoken");
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-
-    if (decoded.role !== "admin") {
-      return res
-        .status(403)
-        .json({ error: "Access denied. Admin role required." });
-    }
-
-    // Find admin
-    const admin = await Admin.findById(decoded.id);
-    if (!admin) {
-      return res.status(404).json({ error: "Admin not found" });
-    }
-
-    // Debug logging
-    console.log("Admin info:", {
-      id: admin._id,
-      name: admin.name,
-      assignedCity: admin.assignedCity,
-      assignedState: admin.assignedState,
-    });
-
-    // Get all complaints for this admin's city (case-insensitive)
-    const complaints = await Complaint.find({
-      "location.city": { $regex: new RegExp(`^${admin.assignedCity}$`, "i") },
-      "location.state": { $regex: new RegExp(`^${admin.assignedState}$`, "i") },
-    })
-      .populate("user", "name email")
-      .sort({ createdAt: -1 });
-
-    console.log(
-      `Found ${complaints.length} complaints for ${admin.assignedCity}, ${admin.assignedState}`
-    );
-
-    // Also check all complaints to see what cities we have
-    const allComplaints = await Complaint.find({}).select(
-      "location.city location.state"
-    );
-    console.log(
-      "All complaint locations:",
-      allComplaints.map(
-        (c) =>
-          `${c.location?.city || "No City"}, ${c.location?.state || "No State"}`
-      )
-    );
-
-    res.json({
-      admin: {
-        name: admin.name,
-        city: admin.assignedCity,
-        state: admin.assignedState,
-      },
-      complaints: complaints.map((complaint) => ({
-        ...complaint.toObject(),
-        imageUrl: complaint.image
-          ? `http://localhost:5000/${complaint.image}`
-          : null,
-        audioUrl: complaint.audio
-          ? `http://localhost:5000/${complaint.audio}`
-          : null,
-      })),
-    });
-  } catch (error) {
-    console.error("Get city complaints error:", error);
     res.status(500).json({ error: "Server error" });
   }
 });
@@ -549,6 +1121,208 @@ router.put("/admin/update-addresses", async (req, res) => {
     });
   } catch (error) {
     console.error("Update addresses error:", error);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// Get complaints assigned to a department
+router.get("/department/my-complaints", auth, async (req, res) => {
+  try {
+    // Check if the authenticated user is a department
+    if (req.user.type !== "department") {
+      return res.status(403).json({
+        error: "Access denied. Department login required.",
+      });
+    }
+
+    // Get department info
+    const Department = require("../models/Department");
+    const department = await Department.findById(req.user.id);
+    if (!department) {
+      return res.status(404).json({
+        error: "Department not found",
+      });
+    }
+
+    // Find complaints assigned to this specific department (AI-routed) or fallback to location/type matching
+    let complaints;
+
+    // First, try to find complaints directly assigned to this department (AI-routed)
+    const directlyAssignedComplaints = await Complaint.find({
+      assignedDepartment: req.user.id,
+    }).sort({ createdAt: -1 });
+
+    // Also find complaints in the department's assigned area and of their type (fallback/legacy)
+    const locationBasedComplaints = await Complaint.find({
+      assignedDepartment: null, // Only get complaints not yet assigned to a specific department
+      $and: [
+        {
+          $or: [
+            {
+              "location.city": {
+                $regex: new RegExp(department.assignedCity, "i"),
+              },
+            },
+            {
+              "location.state": {
+                $regex: new RegExp(department.assignedState, "i"),
+              },
+            },
+            {
+              "location.district": {
+                $regex: new RegExp(department.assignedDistrict, "i"),
+              },
+            },
+          ],
+        },
+        {
+          $or: [
+            {
+              "departmentRouting.detectedDepartment": department.departmentType,
+            },
+            {
+              description: {
+                $regex: new RegExp(
+                  department.departmentType.replace(" Department", ""),
+                  "i"
+                ),
+              },
+            },
+          ],
+        },
+      ],
+    }).sort({ createdAt: -1 });
+
+    // Combine both sets of complaints
+    const allComplaints = [
+      ...directlyAssignedComplaints,
+      ...locationBasedComplaints,
+    ];
+
+    // Remove duplicates based on _id
+    const uniqueComplaints = allComplaints.filter(
+      (complaint, index, self) =>
+        index ===
+        self.findIndex((c) => c._id.toString() === complaint._id.toString())
+    );
+
+    complaints = uniqueComplaints;
+
+    // Add full URL to image and audio paths
+    const complaintsWithUrls = complaints.map((complaint) => ({
+      ...complaint.toObject(),
+      imageUrl: complaint.image
+        ? `${req.protocol}://${req.get("host")}/${complaint.image}`
+        : null,
+      audioUrl: complaint.audio
+        ? `${req.protocol}://${req.get("host")}/${complaint.audio}`
+        : null,
+    }));
+
+    res.json({
+      complaints: complaintsWithUrls,
+      department: department.toJSON(),
+    });
+  } catch (err) {
+    console.error("Department complaints error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// Update complaint status (for departments)
+router.put("/department/:id/status", auth, async (req, res) => {
+  try {
+    // Check if the authenticated user is a department
+    if (req.user.type !== "department") {
+      return res.status(403).json({
+        error: "Access denied. Department login required.",
+      });
+    }
+
+    const { status, departmentComment } = req.body;
+    const complaintId = req.params.id;
+
+    if (!["pending", "in_progress", "resolved"].includes(status)) {
+      return res.status(400).json({
+        error: "Invalid status. Must be pending, in_progress, or resolved",
+      });
+    }
+
+    const complaint = await Complaint.findById(complaintId);
+    if (!complaint) {
+      return res.status(404).json({
+        error: "Complaint not found",
+      });
+    }
+
+    // Store old status for points and notifications
+    const oldStatus = complaint.status;
+    const shouldAwardPoints =
+      oldStatus === "pending" && status === "in_progress";
+
+    // Check if status is actually changing
+    const statusChanged = oldStatus !== status;
+
+    // Update complaint status
+    complaint.status = status;
+    if (departmentComment) {
+      complaint.departmentComment = departmentComment;
+    }
+    complaint.updatedAt = new Date();
+
+    await complaint.save();
+
+    // Send notifications if status changed to in_progress or resolved
+    if (statusChanged && (status === "in_progress" || status === "resolved")) {
+      const notificationService = require("../services/notificationService");
+      const Department = require("../models/Department");
+      const department = await Department.findById(req.user.id);
+      
+      await notificationService.sendStatusUpdateNotification(
+        complaint,
+        oldStatus,
+        status,
+        department ? department.name : "Department"
+      );
+    }
+
+    // Award points to user if complaint status changes from pending to in_progress
+    if (shouldAwardPoints) {
+      const User = require("../models/User");
+      const user = await User.findById(complaint.userId);
+
+      if (user) {
+        // Award 5 points
+        user.points = (user.points || 0) + 5;
+
+        // Add to points history
+        if (!user.pointsHistory) {
+          user.pointsHistory = [];
+        }
+        user.pointsHistory.push({
+          points: 5,
+          reason: "Complaint status changed from pending to in-progress by department",
+          complaintId: complaint._id,
+          awardedAt: new Date(),
+        });
+
+        await user.save();
+
+        console.log(
+          `Awarded 5 points to user ${user.name} (${user.email}) for complaint ${complaint._id} by department`
+        );
+      }
+    }
+
+    res.json({
+      message: "Complaint status updated successfully",
+      complaint: complaint.toObject(),
+      pointsAwarded: shouldAwardPoints ? 5 : 0,
+      notificationSent:
+        statusChanged && (status === "in_progress" || status === "resolved"),
+    });
+  } catch (err) {
+    console.error("Update complaint status error:", err);
     res.status(500).json({ error: "Server error" });
   }
 });

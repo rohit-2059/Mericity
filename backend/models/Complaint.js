@@ -7,6 +7,12 @@ const MessageSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now },
 });
 
+const CommentSchema = new mongoose.Schema({
+  userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+  text: { type: String, required: true },
+  createdAt: { type: Date, default: Date.now },
+});
+
 const ComplaintSchema = new mongoose.Schema({
   userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
   description: { type: String, required: true },
@@ -35,6 +41,20 @@ const ComplaintSchema = new mongoose.Schema({
 
   // Admin assignment
   assignedAdmin: { type: mongoose.Schema.Types.ObjectId, ref: "Admin" },
+
+  // Department assignment (AI-based routing)
+  assignedDepartment: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Department",
+  },
+  departmentRouting: {
+    detectedDepartment: { type: String }, // AI detected department type
+    confidence: { type: Number }, // AI confidence score
+    reasoning: { type: String }, // AI reasoning
+    analysisMethod: { type: String }, // gemini-ai or fallback-keywords
+    isFallback: { type: Boolean, default: false }, // whether fallback was used
+  },
+
   assignedCity: { type: String }, // for quick queries
   assignedState: { type: String },
   image: { type: String, required: true }, // store file URL/path - REQUIRED
@@ -48,7 +68,13 @@ const ComplaintSchema = new mongoose.Schema({
     enum: ["pending", "in_progress", "resolved"],
     default: "pending",
   },
+  departmentComment: { type: String }, // Comments from department
   messages: [MessageSchema],
+
+  // Community features
+  upvotes: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
+  downvotes: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
+  comments: [CommentSchema],
 
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now },

@@ -3,6 +3,7 @@ const jwt = require("jsonwebtoken");
 const Admin = require("../models/Admin");
 const router = express.Router();
 
+
 // Admin Login (using adminId and password)
 router.post("/login", async (req, res) => {
   try {
@@ -60,6 +61,8 @@ router.post("/login", async (req, res) => {
     res.status(500).json({ error: "Server error during login" });
   }
 });
+
+
 
 // Get Admin Profile
 router.get("/me", async (req, res) => {
@@ -177,7 +180,7 @@ router.put("/profile", async (req, res) => {
     });
   } catch (error) {
     console.error("Update profile error:", error);
-    res.status(500).json({ error: "Server error" });
+    res.status(500).json({ error: "Server error", details: error?.message });
   }
 });
 
@@ -201,5 +204,190 @@ const authenticateAdmin = async (req, res, next) => {
     res.status(401).json({ error: "Invalid token" });
   }
 };
+
+// Get all complaints from admin's assigned city (viewing only)
+router.get("/complaints", authenticateAdmin, async (req, res) => {
+  try {
+    const Complaint = require("../models/Complaint");
+    
+    // Get admin info
+    const admin = await Admin.findById(req.admin.id);
+    if (!admin) {
+      return res.status(404).json({ error: "Admin not found" });
+    }
+
+    console.log(`Fetching complaints for admin: ${admin.name} (${admin.assignedCity}, ${admin.assignedState})`);
+
+    // Find all complaints from admin's assigned city and state
+    const complaints = await Complaint.find({
+      $and: [
+        {
+          $or: [
+            { 'location.city': { $regex: new RegExp(admin.assignedCity, 'i') } },
+            { assignedCity: { $regex: new RegExp(admin.assignedCity, 'i') } }
+          ]
+        },
+        {
+          $or: [
+            { 'location.state': { $regex: new RegExp(admin.assignedState, 'i') } },
+            { assignedState: { $regex: new RegExp(admin.assignedState, 'i') } }
+          ]
+        }
+      ]
+    })
+    .populate('userId', 'name email phone')
+    .populate('assignedDepartment', 'name departmentType email contactNumber')
+    .sort({ createdAt: -1 });
+
+    // Add full URL to image and audio paths, and canManage property
+    const complaintsWithUrls = complaints.map((complaint) => ({
+      ...complaint.toObject(),
+      imageUrl: complaint.image
+        ? `${req.protocol}://${req.get("host")}/${complaint.image}`
+        : null,
+      audioUrl: complaint.audio
+        ? `${req.protocol}://${req.get("host")}/${complaint.audio}`
+        : null,
+      canManage: !complaint.assignedDepartment, // Admin can only manage complaints not assigned to departments
+    }));
+
+    // Calculate stats
+    const stats = {
+      pending: complaintsWithUrls.filter(c => c.status === "pending").length,
+      in_progress: complaintsWithUrls.filter(c => c.status === "in_progress").length,
+      resolved: complaintsWithUrls.filter(c => c.status === "resolved").length,
+      total: complaintsWithUrls.length
+    };
+
+    res.json({ 
+      complaints: complaintsWithUrls,
+      stats,
+      admin: {
+        name: admin.name,
+        city: admin.assignedCity,
+        state: admin.assignedState
+      },
+      message: `Found ${complaintsWithUrls.length} complaints from ${admin.assignedCity}, ${admin.assignedState}`,
+      note: "Admin can view all complaints but cannot modify status - only departments can update complaint status"
+    });
+
+  } catch (error) {
+    console.error("Admin complaints fetch error:", error);
+    res.status(500).json({ error: "Server error", details: error?.message });
+  }
+});
+
+// Get complaint statistics for admin's city
+router.get("/stats", authenticateAdmin, async (req, res) => {
+  try {
+    const Complaint = require("../models/Complaint");
+    const Department = require("../models/Department");
+    
+    const admin = await Admin.findById(req.admin.id);
+    if (!admin) {
+      return res.status(404).json({ error: "Admin not found" });
+    }
+
+    // Get complaint stats
+    const totalComplaints = await Complaint.countDocuments({
+      $and: [
+        {
+          $or: [
+            { 'location.city': { $regex: new RegExp(admin.assignedCity, 'i') } },
+            { assignedCity: { $regex: new RegExp(admin.assignedCity, 'i') } }
+          ]
+        },
+        {
+          $or: [
+            { 'location.state': { $regex: new RegExp(admin.assignedState, 'i') } },
+            { assignedState: { $regex: new RegExp(admin.assignedState, 'i') } }
+          ]
+        }
+      ]
+    });
+
+    const pendingComplaints = await Complaint.countDocuments({
+      status: "pending",
+      $and: [
+        {
+          $or: [
+            { 'location.city': { $regex: new RegExp(admin.assignedCity, 'i') } },
+            { assignedCity: { $regex: new RegExp(admin.assignedCity, 'i') } }
+          ]
+        },
+        {
+          $or: [
+            { 'location.state': { $regex: new RegExp(admin.assignedState, 'i') } },
+            { assignedState: { $regex: new RegExp(admin.assignedState, 'i') } }
+          ]
+        }
+      ]
+    });
+
+    const inProgressComplaints = await Complaint.countDocuments({
+      status: "in_progress",
+      $and: [
+        {
+          $or: [
+            { 'location.city': { $regex: new RegExp(admin.assignedCity, 'i') } },
+            { assignedCity: { $regex: new RegExp(admin.assignedCity, 'i') } }
+          ]
+        },
+        {
+          $or: [
+            { 'location.state': { $regex: new RegExp(admin.assignedState, 'i') } },
+            { assignedState: { $regex: new RegExp(admin.assignedState, 'i') } }
+          ]
+        }
+      ]
+    });
+
+    const resolvedComplaints = await Complaint.countDocuments({
+      status: "resolved",
+      $and: [
+        {
+          $or: [
+            { 'location.city': { $regex: new RegExp(admin.assignedCity, 'i') } },
+            { assignedCity: { $regex: new RegExp(admin.assignedCity, 'i') } }
+          ]
+        },
+        {
+          $or: [
+            { 'location.state': { $regex: new RegExp(admin.assignedState, 'i') } },
+            { assignedState: { $regex: new RegExp(admin.assignedState, 'i') } }
+          ]
+        }
+      ]
+    });
+
+    // Get department stats
+    const activeDepartments = await Department.countDocuments({
+      isActive: true,
+      $or: [
+        { assignedCity: { $regex: new RegExp(admin.assignedCity, 'i') } },
+        { assignedState: { $regex: new RegExp(admin.assignedState, 'i') } }
+      ]
+    });
+
+    res.json({
+      stats: {
+        total: totalComplaints,
+        pending: pendingComplaints,
+        in_progress: inProgressComplaints,
+        resolved: resolvedComplaints,
+        departments: activeDepartments
+      },
+      admin: {
+        name: admin.name,
+        city: admin.assignedCity,
+        state: admin.assignedState
+      }
+    });
+
+  } catch (error) {
+    console.error("Admin stats fetch error:", error);
+    res.status(500).json({ error: "Server error", details: error?.message });
+  }
+});
 
 module.exports = router;

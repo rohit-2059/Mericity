@@ -262,15 +262,26 @@ function AdminLogin() {
                 </button>
               </form>
 
-              {/* Back to User Login */}
-              <div className="mt-6 text-center">
-                <button
-                  onClick={() => navigate("/")}
-                  className="text-sm text-blue-600 hover:text-blue-800 transition-colors"
-                >
-                  <i className="fas fa-arrow-left mr-2"></i>
-                  Back to User Login
-                </button>
+              {/* Navigation Links */}
+              <div className="mt-6 space-y-2">
+                <div className="text-center">
+                  <button
+                    onClick={() => navigate("/dep")}
+                    className="text-sm text-orange-600 hover:text-orange-800 transition-colors"
+                  >
+                    <i className="fas fa-building mr-2"></i>
+                    Department Login
+                  </button>
+                </div>
+                <div className="text-center">
+                  <button
+                    onClick={() => navigate("/")}
+                    className="text-sm text-blue-600 hover:text-blue-800 transition-colors"
+                  >
+                    <i className="fas fa-arrow-left mr-2"></i>
+                    Back to User Login
+                  </button>
+                </div>
               </div>
             </div>
           </div>

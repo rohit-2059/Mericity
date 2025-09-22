@@ -1,16 +1,25 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faMap } from "@fortawesome/free-solid-svg-icons";
 import ComplaintForm from "../components/ComplaintForm";
 import ExploreComplaints from "../components/ExploreComplaints";
+import CommunityComplaints from "../components/CommunityComplaints";
+import ChatModal from "../components/ChatModal";
+import Janawaaz from "../components/Janawaaz";
+import Rewards from "../components/Rewards";
+import { api, APIError } from "../utils/api";
 
 function Dashboard() {
   const [complaints, setComplaints] = useState([]);
-  const [activeTab, setActiveTab] = useState("open"); // open | closed | explore
+  const [activeTab, setActiveTab] = useState("open"); // open | closed | explore | community | janawaaz | rewards
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showComplaintForm, setShowComplaintForm] = useState(false);
   const [selectedComplaint, setSelectedComplaint] = useState(null);
+  const [showChatModal, setShowChatModal] = useState(false);
+  const [selectedChatComplaint, setSelectedChatComplaint] = useState(null);
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
   const [showChangePasswordModal, setShowChangePasswordModal] = useState(false);
   const [showEditDetailsModal, setShowEditDetailsModal] = useState(false);
@@ -46,13 +55,9 @@ function Dashboard() {
 
   useEffect(() => {
     if (token) {
-      // Fetch complaints
-      fetch("http://localhost:5000/complaints", {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-        .then((res) => res.json())
+      // Fetch complaints using API utility
+      api.getComplaints(token)
         .then((data) => {
-          // Handle the new response structure
           console.log('API Response:', data);
           console.log('Complaints data:', data.complaints);
           if (data.complaints && data.complaints.length > 0) {
@@ -66,16 +71,17 @@ function Dashboard() {
         })
         .catch((error) => {
           console.error("Error fetching complaints:", error);
-          setError("Failed to load complaints");
+          if (error instanceof APIError) {
+            setError(`Failed to load complaints: ${error.message}`);
+          } else {
+            setError("Failed to load complaints");
+          }
           setComplaints([]);
           setLoading(false);
         });
 
-      // Fetch user details
-      fetch("http://localhost:5000/user/profile", {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-        .then((res) => res.json())
+      // Fetch user details using API utility
+      api.getUserProfile(token)
         .then((data) => {
           console.log('User profile API response:', data);
           if (data.user) {
@@ -87,12 +93,13 @@ function Dashboard() {
         })
         .catch((error) => {
           console.error("Error fetching user details:", error);
+          // Don't show error for user details as it's not critical
         });
     }
   }, [token]);
 
   // Filter complaints by status (handle case where complaints might not be loaded yet)
-  const openComplaints = complaints.filter((c) => c && c.status === "pending");
+  const openComplaints = complaints.filter((c) => c && (c.status === "pending" || c.status === "in_progress"));
   const closedComplaints = complaints.filter((c) => c && (c.status === "resolved" || c.status === "closed"));
 
   if (loading) {
@@ -114,150 +121,59 @@ function Dashboard() {
 
   return (
     <>
-      {/* Responsive CSS */}
-      <style>{`
-        @media (max-width: 768px) {
-          .mobile-responsive-grid {
-            grid-template-columns: 1fr !important;
-            gap: 8px !important;
-            padding: 0 8px !important;
-          }
-          .mobile-responsive-modal {
-            padding: 20px !important;
-            border-radius: 8px !important;
-            width: 100% !important;
-            max-height: 95vh !important;
-          }
-          .mobile-responsive-form-grid {
-            grid-template-columns: 1fr !important;
-            gap: 16px !important;
-          }
-        }
-        @media (max-width: 480px) {
-          .mobile-single-column {
-            grid-template-columns: 1fr !important;
-          }
-        }
-      `}</style>
-      
-      <div style={{ display: "flex", minHeight: "100vh" }}>
+      <div className="flex min-h-screen bg-gray-50">
       {/* Mobile Sidebar Overlay */}
       {sidebarOpen && (
         <div
-          style={{
-            position: "fixed",
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: "rgba(0, 0, 0, 0.5)",
-            zIndex: 999,
-            display: window.innerWidth <= 768 ? "block" : "none"
-          }}
+          className="fixed inset-0 bg-black bg-opacity-50 z-[999] md:hidden"
           onClick={() => setSidebarOpen(false)}
         />
       )}
       
       {/* Sidebar */}
       <div
-        style={{
-          width: sidebarOpen ? "280px" : "0",
-          backgroundColor: "#ffffff",
-          color: "#202124",
-          transition: "width 0.3s ease, transform 0.3s ease",
-          overflow: "hidden",
-          position: "fixed",
-          height: "100vh",
-          zIndex: 1000,
-          borderRight: "1px solid #e8eaed",
-          boxShadow: sidebarOpen ? "0 2px 10px rgba(0,0,0,0.1)" : "none",
-          transform: window.innerWidth <= 768 && !sidebarOpen ? "translateX(-100%)" : "translateX(0)"
-        }}
+        className={`
+          fixed top-0 left-0 h-screen bg-white text-gray-800 z-[1000]
+          transition-all duration-300 ease-in-out overflow-hidden
+          border-r border-gray-200
+          ${sidebarOpen 
+            ? 'w-72 shadow-lg' 
+            : 'w-0'
+          }
+          ${!sidebarOpen ? 'md:transform-none transform -translate-x-full' : 'transform-none'}
+        `}
       >
-        <div style={{ padding: "24px 0", width: "280px" }}>
+        <div className="py-6 w-72">
           {/* Sidebar Header with Menu Button */}
-          <div style={{ 
-            padding: "0 16px 24px 16px", 
-            borderBottom: "1px solid #e8eaed",
-            marginBottom: "16px",
-            display: "flex",
-            alignItems: "center",
-            gap: "12px"
-          }}>
+          <div className="px-4 pb-6 border-b border-gray-200 mb-4 flex items-center gap-3">
             {/* Menu Button in Sidebar */}
             <button
               onClick={() => setSidebarOpen(!sidebarOpen)}
-              style={{
-                background: "none",
-                border: "none",
-                color: "#5f6368",
-                cursor: "pointer",
-                padding: "8px",
-                borderRadius: "50%",
-                transition: "all 0.2s ease",
-                width: "32px",
-                height: "32px",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center"
-              }}
-              onMouseOver={(e) => {
-                e.target.style.backgroundColor = "#f1f3f4";
-                e.target.style.color = "#202124";
-              }}
-              onMouseOut={(e) => {
-                e.target.style.backgroundColor = "transparent";
-                e.target.style.color = "#5f6368";
-              }}
+              className="bg-transparent border-none text-gray-500 cursor-pointer p-2 rounded-full 
+                         transition-all duration-200 w-8 h-8 flex items-center justify-center
+                         hover:bg-gray-100 hover:text-gray-800"
             >
-              <i className="fas fa-bars" style={{ fontSize: "16px" }}></i>
+              <i className="fas fa-bars text-sm"></i>
             </button>
-            <h2 style={{ 
-              margin: "0", 
-              color: "#202124", 
-              fontSize: "22px", 
-              fontWeight: "400",
-              letterSpacing: "-0.5px"
-            }}>
+            <h2 className="m-0 text-gray-800 text-xl font-normal tracking-tight">
               MeriCity
             </h2>
           </div>
           
           {/* Navigation Items */}
-          <div style={{ padding: "0 12px" }}>
+          <div className="px-3">
             <button
               onClick={() => setActiveTab("open")}
-              style={{
-                width: "100%",
-                padding: "12px 20px",
-                backgroundColor: activeTab === "open" ? "#e8f0fe" : "transparent",
-                color: activeTab === "open" ? "#1a73e8" : "#5f6368",
-                border: "none",
-                borderRadius: "8px",
-                cursor: "pointer",
-                textAlign: "left",
-                marginBottom: "4px",
-                fontSize: "14px",
-                fontWeight: activeTab === "open" ? "500" : "400",
-                transition: "all 0.2s ease",
-                display: "flex",
-                alignItems: "center",
-                gap: "12px"
-              }}
-              onMouseOver={(e) => {
-                if (activeTab !== "open") {
-                  e.target.style.backgroundColor = "#f1f3f4";
-                  e.target.style.color = "#202124";
+              className={`
+                w-full py-3 px-5 border-none rounded-lg cursor-pointer text-left mb-1 
+                text-sm transition-all duration-200 flex items-center gap-3
+                ${activeTab === "open" 
+                  ? 'bg-blue-50 text-blue-600 font-medium' 
+                  : 'bg-transparent text-gray-500 font-normal hover:bg-gray-100 hover:text-gray-800'
                 }
-              }}
-              onMouseOut={(e) => {
-                if (activeTab !== "open") {
-                  e.target.style.backgroundColor = "transparent";
-                  e.target.style.color = "#5f6368";
-                }
-              }}
+              `}
             >
-              <i className="fas fa-folder-open" style={{ fontSize: "16px" }}></i>
+              <i className="fas fa-folder-open text-base"></i>
               <span>Open Complaints</span>
             </button>
             
@@ -331,6 +247,114 @@ function Dashboard() {
             >
               <i className="fas fa-map-marked-alt" style={{ fontSize: "16px" }}></i>
               <span>Explore Map</span>
+            </button>
+            
+            <button
+              onClick={() => setActiveTab("community")}
+              style={{
+                width: "100%",
+                padding: "12px 20px",
+                backgroundColor: activeTab === "community" ? "#e8f0fe" : "transparent",
+                color: activeTab === "community" ? "#1a73e8" : "#5f6368",
+                border: "none",
+                borderRadius: "8px",
+                cursor: "pointer",
+                textAlign: "left",
+                marginBottom: "4px",
+                fontSize: "14px",
+                fontWeight: activeTab === "community" ? "500" : "400",
+                transition: "all 0.2s ease",
+                display: "flex",
+                alignItems: "center",
+                gap: "12px"
+              }}
+              onMouseOver={(e) => {
+                if (activeTab !== "community") {
+                  e.target.style.backgroundColor = "#f1f3f4";
+                  e.target.style.color = "#202124";
+                }
+              }}
+              onMouseOut={(e) => {
+                if (activeTab !== "community") {
+                  e.target.style.backgroundColor = "transparent";
+                  e.target.style.color = "#5f6368";
+                }
+              }}
+            >
+              <i className="fas fa-users" style={{ fontSize: "16px" }}></i>
+              <span>Community</span>
+            </button>
+            
+            <button
+              onClick={() => setActiveTab("janawaaz")}
+              style={{
+                width: "100%",
+                padding: "12px 20px",
+                backgroundColor: activeTab === "janawaaz" ? "#fef7e0" : "transparent",
+                color: activeTab === "janawaaz" ? "#f57f17" : "#5f6368",
+                border: "none",
+                borderRadius: "8px",
+                cursor: "pointer",
+                textAlign: "left",
+                marginBottom: "4px",
+                fontSize: "14px",
+                fontWeight: activeTab === "janawaaz" ? "500" : "400",
+                transition: "all 0.2s ease",
+                display: "flex",
+                alignItems: "center",
+                gap: "12px"
+              }}
+              onMouseOver={(e) => {
+                if (activeTab !== "janawaaz") {
+                  e.target.style.backgroundColor = "#f1f3f4";
+                  e.target.style.color = "#202124";
+                }
+              }}
+              onMouseOut={(e) => {
+                if (activeTab !== "janawaaz") {
+                  e.target.style.backgroundColor = "transparent";
+                  e.target.style.color = "#5f6368";
+                }
+              }}
+            >
+              <i className="fas fa-trophy" style={{ fontSize: "16px" }}></i>
+              <span>Janawaaz</span>
+            </button>
+            
+            <button
+              onClick={() => setActiveTab("rewards")}
+              style={{
+                width: "100%",
+                padding: "12px 20px",
+                backgroundColor: activeTab === "rewards" ? "#fef7e0" : "transparent",
+                color: activeTab === "rewards" ? "#f57f17" : "#5f6368",
+                border: "none",
+                borderRadius: "8px",
+                cursor: "pointer",
+                textAlign: "left",
+                marginBottom: "4px",
+                fontSize: "14px",
+                fontWeight: activeTab === "rewards" ? "500" : "400",
+                transition: "all 0.2s ease",
+                display: "flex",
+                alignItems: "center",
+                gap: "12px"
+              }}
+              onMouseOver={(e) => {
+                if (activeTab !== "rewards") {
+                  e.target.style.backgroundColor = "#f1f3f4";
+                  e.target.style.color = "#202124";
+                }
+              }}
+              onMouseOut={(e) => {
+                if (activeTab !== "rewards") {
+                  e.target.style.backgroundColor = "transparent";
+                  e.target.style.color = "#5f6368";
+                }
+              }}
+            >
+              <i className="fas fa-gift" style={{ fontSize: "16px" }}></i>
+              <span>Rewards</span>
             </button>
           </div>
           
@@ -639,15 +663,19 @@ function Dashboard() {
                       {/* Card Header */}
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
                         <span style={{
-                          backgroundColor: c.status === "pending" ? "#fff3cd" : "#d1ecf1",
-                          color: c.status === "pending" ? "#856404" : "#0c5460",
+                          backgroundColor: c.status === "pending" ? "#fff3cd" : 
+                                         c.status === "in_progress" ? "#d4edda" : "#d1ecf1",
+                          color: c.status === "pending" ? "#856404" : 
+                               c.status === "in_progress" ? "#155724" : "#0c5460",
                           padding: "2px 8px",
                           borderRadius: "12px",
                           fontSize: "10px",
                           fontWeight: "600",
                           textTransform: "uppercase"
                         }}>
-                          {c.status}
+                          {c.status === "in_progress" ? "🔄 IN PROGRESS" : 
+                           c.status === "pending" ? "⏳ PENDING" : 
+                           c.status}
                         </span>
                         <span style={{ 
                           fontSize: "11px", 
@@ -706,18 +734,58 @@ function Dashboard() {
                           <i className="fas fa-phone" style={{ fontSize: "10px", color: "#5f6368" }}></i>
                           <span style={{ fontSize: "11px", color: "#5f6368" }}>{c.phone}</span>
                         </div>
-                        {c.priority && (
-                          <span style={{
-                            backgroundColor: c.priority === "High" ? "#f8d7da" : c.priority === "Medium" ? "#fff3cd" : "#d4edda",
-                            color: c.priority === "High" ? "#721c24" : c.priority === "Medium" ? "#856404" : "#155724",
-                            padding: "1px 5px",
-                            borderRadius: "8px",
-                            fontSize: "9px",
-                            fontWeight: "500"
-                          }}>
-                            {c.priority}
-                          </span>
-                        )}
+                        
+                        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                          {c.priority && (
+                            <span style={{
+                              backgroundColor: c.priority === "High" ? "#f8d7da" : c.priority === "Medium" ? "#fff3cd" : "#d4edda",
+                              color: c.priority === "High" ? "#721c24" : c.priority === "Medium" ? "#856404" : "#155724",
+                              padding: "1px 5px",
+                              borderRadius: "8px",
+                              fontSize: "9px",
+                              fontWeight: "500"
+                            }}>
+                              {c.priority}
+                            </span>
+                          )}
+                          
+                          {/* Chat button for department-assigned complaints */}
+                          {c.assignedDepartment && c.status !== "resolved" && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedChatComplaint(c);
+                                setShowChatModal(true);
+                              }}
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "4px",
+                                padding: "4px 8px",
+                                borderRadius: "6px",
+                                backgroundColor: "#1a73e8",
+                                color: "white",
+                                border: "none",
+                                fontSize: "10px",
+                                fontWeight: "500",
+                                cursor: "pointer",
+                                transition: "all 0.2s ease"
+                              }}
+                              onMouseOver={(e) => {
+                                e.target.style.backgroundColor = "#1557b0";
+                                e.target.style.transform = "translateY(-1px)";
+                              }}
+                              onMouseOut={(e) => {
+                                e.target.style.backgroundColor = "#1a73e8";
+                                e.target.style.transform = "translateY(0)";
+                              }}
+                              title="Chat with assigned department"
+                            >
+                              <i className="fas fa-comments" style={{ fontSize: "10px" }}></i>
+                              <span>Chat</span>
+                            </button>
+                          )}
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -857,9 +925,49 @@ function Dashboard() {
                           <i className="fas fa-phone" style={{ fontSize: "14px", color: "#5f6368" }}></i>
                           <span style={{ fontSize: "14px", color: "#5f6368" }}>{c.phone}</span>
                         </div>
-                        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                          <i className="fas fa-check" style={{ fontSize: "14px", color: "#34a853" }}></i>
-                          <span style={{ fontSize: "14px", color: "#34a853", fontWeight: "500" }}>Resolved</span>
+                        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                          {/* Chat button for resolved complaints with department assignment (for history) */}
+                          {c.assignedDepartment && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedChatComplaint(c);
+                                setShowChatModal(true);
+                              }}
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "4px",
+                                padding: "6px 10px",
+                                borderRadius: "8px",
+                                backgroundColor: "#f8f9fa",
+                                color: "#5f6368",
+                                border: "1px solid #e8eaed",
+                                fontSize: "12px",
+                                fontWeight: "500",
+                                cursor: "pointer",
+                                transition: "all 0.2s ease"
+                              }}
+                              onMouseOver={(e) => {
+                                e.target.style.backgroundColor = "#e8f0fe";
+                                e.target.style.color = "#1a73e8";
+                                e.target.style.borderColor = "#dadce0";
+                              }}
+                              onMouseOut={(e) => {
+                                e.target.style.backgroundColor = "#f8f9fa";
+                                e.target.style.color = "#5f6368";
+                                e.target.style.borderColor = "#e8eaed";
+                              }}
+                              title="View chat history"
+                            >
+                              <i className="fas fa-comments" style={{ fontSize: "11px" }}></i>
+                              <span>Chat History</span>
+                            </button>
+                          )}
+                          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                            <i className="fas fa-check" style={{ fontSize: "14px", color: "#34a853" }}></i>
+                            <span style={{ fontSize: "14px", color: "#34a853", fontWeight: "500" }}>Resolved</span>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -876,8 +984,53 @@ function Dashboard() {
 
           {activeTab === "explore" && (
             <>
-              <h3>🗺️ Explore Pending Complaints</h3>
+              <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <FontAwesomeIcon icon={faMap} style={{ color: '#1a73e8' }} /> 
+                Explore Pending Complaints
+              </h3>
               <ExploreComplaints token={token} />
+            </>
+          )}
+
+          {activeTab === "community" && (
+            <CommunityComplaints token={token} />
+          )}
+
+          {activeTab === "janawaaz" && (
+            <>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", marginBottom: "24px" }}>
+                <i className="fas fa-trophy" style={{ fontSize: "24px", color: "#f57f17", marginRight: "12px" }}></i>
+                <h3 style={{ margin: "0", fontSize: "28px", fontWeight: "500", color: "#202124" }}>Janawaaz - Public Recognition</h3>
+              </div>
+              <div style={{ 
+                backgroundColor: "white", 
+                borderRadius: "8px", 
+                boxShadow: "0 1px 4px rgba(0,0,0,0.1)",
+                border: "1px solid #e8eaed",
+                height: "calc(100vh - 200px)",
+                overflow: "hidden"
+              }}>
+                <Janawaaz token={token} />
+              </div>
+            </>
+          )}
+
+          {activeTab === "rewards" && (
+            <>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", marginBottom: "24px" }}>
+                <i className="fas fa-gift" style={{ fontSize: "24px", color: "#f57f17", marginRight: "12px" }}></i>
+                <h3 style={{ margin: "0", fontSize: "28px", fontWeight: "500", color: "#202124" }}>Rewards Center</h3>
+              </div>
+              <div style={{ 
+                backgroundColor: "white", 
+                borderRadius: "8px", 
+                boxShadow: "0 1px 4px rgba(0,0,0,0.1)",
+                border: "1px solid #e8eaed",
+                height: "calc(100vh - 200px)",
+                overflow: "auto"
+              }}>
+                <Rewards />
+              </div>
             </>
           )}
         </div>
@@ -1958,6 +2111,18 @@ function Dashboard() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Chat Modal */}
+      {showChatModal && selectedChatComplaint && (
+        <ChatModal
+          isOpen={showChatModal}
+          onClose={() => {
+            setShowChatModal(false);
+            setSelectedChatComplaint(null);
+          }}
+          complaint={selectedChatComplaint}
+        />
       )}
     </div>
     </>

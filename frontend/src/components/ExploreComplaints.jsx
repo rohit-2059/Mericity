@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { Wrapper, Status } from "@googlemaps/react-wrapper";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faMap, faMapMarkerAlt, faPhone, faBolt, faComments } from "@fortawesome/free-solid-svg-icons";
 
 const render = (status) => {
   switch (status) {
@@ -81,6 +83,21 @@ const ExploreMapComponent = ({ complaints }) => {
               <h4 style="margin: 0 0 8px 0; color: #333;">Complaint #${index + 1}</h4>
               <p style="margin: 0 0 8px 0; font-size: 12px;"><strong>Description:</strong> ${complaint.description.substring(0, 100)}...</p>
               <p style="margin: 0 0 8px 0; font-size: 12px;"><strong>Phone:</strong> ${complaint.phone}</p>
+              <p style="margin: 0 0 8px 0; font-size: 12px;"><strong>Status:</strong> <span style="
+                background-color: ${complaint.status === "pending" ? "#fff3cd" : 
+                                  complaint.status === "in_progress" ? "#d4edda" : "#d1ecf1"};
+                color: ${complaint.status === "pending" ? "#856404" : 
+                        complaint.status === "in_progress" ? "#155724" : "#0c5460"};
+                padding: 2px 6px;
+                border-radius: 8px;
+                font-size: 10px;
+                font-weight: 600;
+                text-transform: uppercase;
+              ">
+                ${complaint.status === "in_progress" ? "🔄 IN PROGRESS" : 
+                  complaint.status === "pending" ? "⏳ PENDING" : 
+                  complaint.status}
+              </span></p>
               ${complaint.priority ? `<p style="margin: 0 0 8px 0; font-size: 12px;"><strong>Priority:</strong> ${complaint.priority}</p>` : ''}
               <p style="margin: 0; font-size: 11px; color: #666;"><strong>Date:</strong> ${new Date(complaint.createdAt).toLocaleDateString()}</p>
               <button onclick="window.viewComplaintDetails('${complaint._id}')" style="margin-top: 8px; padding: 4px 8px; background: #007bff; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 11px;">View Details</button>
@@ -121,6 +138,8 @@ const ExploreComplaints = ({ token }) => {
         // Calculate stats
         const stats = {
           total: pendingComplaints.length,
+          pending: pendingComplaints.filter(c => c.status === "pending").length,
+          inProgress: pendingComplaints.filter(c => c.status === "in_progress").length,
           high: pendingComplaints.filter(c => c.priority === "High").length,
           medium: pendingComplaints.filter(c => c.priority === "Medium").length,
           low: pendingComplaints.filter(c => c.priority === "Low").length
@@ -171,7 +190,10 @@ const ExploreComplaints = ({ token }) => {
         borderRadius: "8px",
         margin: "20px"
       }}>
-        <h3>🗺️ Map View Unavailable</h3>
+        <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <FontAwesomeIcon icon={faMap} style={{ color: '#ef4444' }} />
+          Map View Unavailable
+        </h3>
         <p>Please add your Google Maps API key to view complaints on the map.</p>
         
         {/* Debug: Show complaints without map */}
@@ -214,7 +236,27 @@ const ExploreComplaints = ({ token }) => {
           border: "2px solid #007bff"
         }}>
           <h3 style={{ margin: "0", color: "#007bff" }}>{stats.total}</h3>
-          <p style={{ margin: "5px 0 0 0", fontSize: "14px" }}>Total Pending</p>
+          <p style={{ margin: "5px 0 0 0", fontSize: "14px" }}>Total Open</p>
+        </div>
+        <div style={{ 
+          backgroundColor: "#fff8e1", 
+          padding: "15px", 
+          borderRadius: "8px", 
+          textAlign: "center",
+          border: "2px solid #ff9800"
+        }}>
+          <h3 style={{ margin: "0", color: "#ff9800" }}>{stats.pending}</h3>
+          <p style={{ margin: "5px 0 0 0", fontSize: "14px" }}>⏳ Pending</p>
+        </div>
+        <div style={{ 
+          backgroundColor: "#e8f5e8", 
+          padding: "15px", 
+          borderRadius: "8px", 
+          textAlign: "center",
+          border: "2px solid #4caf50"
+        }}>
+          <h3 style={{ margin: "0", color: "#4caf50" }}>{stats.inProgress}</h3>
+          <p style={{ margin: "5px 0 0 0", fontSize: "14px" }}>� In Progress</p>
         </div>
         <div style={{ 
           backgroundColor: "#ffebee", 
@@ -224,27 +266,7 @@ const ExploreComplaints = ({ token }) => {
           border: "2px solid #f44336"
         }}>
           <h3 style={{ margin: "0", color: "#f44336" }}>{stats.high}</h3>
-          <p style={{ margin: "5px 0 0 0", fontSize: "14px" }}>🔴 High Priority</p>
-        </div>
-        <div style={{ 
-          backgroundColor: "#fff8e1", 
-          padding: "15px", 
-          borderRadius: "8px", 
-          textAlign: "center",
-          border: "2px solid #ff9800"
-        }}>
-          <h3 style={{ margin: "0", color: "#ff9800" }}>{stats.medium}</h3>
-          <p style={{ margin: "5px 0 0 0", fontSize: "14px" }}>🟡 Medium Priority</p>
-        </div>
-        <div style={{ 
-          backgroundColor: "#e8f5e8", 
-          padding: "15px", 
-          borderRadius: "8px", 
-          textAlign: "center",
-          border: "2px solid #4caf50"
-        }}>
-          <h3 style={{ margin: "0", color: "#4caf50" }}>{stats.low}</h3>
-          <p style={{ margin: "5px 0 0 0", fontSize: "14px" }}>🟢 Low Priority</p>
+          <p style={{ margin: "5px 0 0 0", fontSize: "14px" }}>� High Priority</p>
         </div>
       </div>
 
@@ -261,11 +283,12 @@ const ExploreComplaints = ({ token }) => {
           backgroundColor: "#f8f9fa", 
           borderBottom: "1px solid #ddd" 
         }}>
-          <h3 style={{ margin: "0", color: "#333" }}>
-            🗺️ Pending Complaints Map ({complaints.length} locations)
+          <h3 style={{ margin: "0", color: "#333", display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <FontAwesomeIcon icon={faMap} style={{ color: '#3b82f6' }} />
+            Open Complaints Map ({complaints.length} locations)
           </h3>
           <p style={{ margin: "5px 0 0 0", fontSize: "14px", color: "#666" }}>
-            Click on markers to view complaint details
+            Showing both pending and in-progress complaints • Click markers to view details
           </p>
         </div>
         
@@ -286,7 +309,7 @@ const ExploreComplaints = ({ token }) => {
             gap: "10px"
           }}>
             <p style={{ color: "#666", fontSize: "18px", margin: 0 }}>
-              🎉 No pending complaints to display on the map!
+              🎉 No open complaints to display on the map!
             </p>
             <p style={{ color: "#888", fontSize: "14px", margin: 0 }}>
               When complaints are submitted, they will appear here as markers.
@@ -454,11 +477,25 @@ const ExploreComplaints = ({ token }) => {
               </div>
             )}
             
-            <p><strong>📍 Location:</strong> {selectedComplaint.location.lat.toFixed(6)}, {selectedComplaint.location.lng.toFixed(6)}</p>
-            <p><strong>📞 Phone:</strong> {selectedComplaint.phone}</p>
-            {selectedComplaint.priority && <p><strong>⚡ Priority:</strong> {selectedComplaint.priority}</p>}
-            {selectedComplaint.reason && <p><strong>💭 Reason:</strong> {selectedComplaint.reason}</p>}
-            <p><strong>📊 Status:</strong> <span style={{color: "#ff9800", fontWeight: "bold"}}>{selectedComplaint.status}</span></p>
+            <p><strong><FontAwesomeIcon icon={faMapMarkerAlt} /> Location:</strong> {selectedComplaint.location.lat.toFixed(6)}, {selectedComplaint.location.lng.toFixed(6)}</p>
+            <p><strong><FontAwesomeIcon icon={faPhone} /> Phone:</strong> {selectedComplaint.phone}</p>
+            {selectedComplaint.priority && <p><strong><FontAwesomeIcon icon={faBolt} /> Priority:</strong> {selectedComplaint.priority}</p>}
+            {selectedComplaint.reason && <p><strong><FontAwesomeIcon icon={faComments} /> Reason:</strong> {selectedComplaint.reason}</p>}
+            <p><strong>📊 Status:</strong> <span style={{
+              backgroundColor: selectedComplaint.status === "pending" ? "#fff3cd" : 
+                             selectedComplaint.status === "in_progress" ? "#d4edda" : "#d1ecf1",
+              color: selectedComplaint.status === "pending" ? "#856404" : 
+                   selectedComplaint.status === "in_progress" ? "#155724" : "#0c5460",
+              padding: "4px 8px",
+              borderRadius: "12px",
+              fontSize: "12px",
+              fontWeight: "600",
+              textTransform: "uppercase"
+            }}>
+              {selectedComplaint.status === "in_progress" ? "🔄 IN PROGRESS" : 
+               selectedComplaint.status === "pending" ? "⏳ PENDING" : 
+               selectedComplaint.status}
+            </span></p>
             <p><strong>📅 Created:</strong> {new Date(selectedComplaint.createdAt).toLocaleString()}</p>
           </div>
         </div>

@@ -5,6 +5,7 @@ import FilterControls from '../components/FilterControls';
 import { useComplaintFilters } from '../components/useComplaintFilters';
 import Graph from '../components/Graph';
 import AdminMapView from '../components/AdminMapView';
+import AdminDeptChatModal from '../components/AdminDeptChatModal';
 import { 
   faBuilding, 
   faSignOutAlt, 
@@ -25,7 +26,9 @@ import {
   faTimes,
   faExclamationTriangle,
   faQuestionCircle,
-  faImage
+  faImage,
+  faComments,
+  faUsers
 } from '@fortawesome/free-solid-svg-icons';
 
 function AdminDashboard() {
@@ -36,6 +39,90 @@ function AdminDashboard() {
   const [activeTab, setActiveTab] = useState("pending");
   const [selectedComplaint, setSelectedComplaint] = useState(null);
   const [stats, setStats] = useState({ pending: 0, in_progress: 0, resolved: 0, total: 0 });
+  const [departments, setDepartments] = useState([]);
+  const [selectedDepartment, setSelectedDepartment] = useState(null);
+  const [showChatModal, setShowChatModal] = useState(false);
+  const [showChatDropdown, setShowChatDropdown] = useState(false);
+  const [unreadMessages, setUnreadMessages] = useState({}); // Object to track unread messages per department
+  const [isUnreadMessagesInitialized, setIsUnreadMessagesInitialized] = useState(false);
+  
+  // Calculate total unread messages
+  const getTotalUnreadCount = useCallback(() => {
+    return Object.values(unreadMessages).reduce((total, count) => total + count, 0);
+  }, [unreadMessages]);
+
+  // Function to clear unread messages for a specific department
+  const markDepartmentAsRead = useCallback((departmentId) => {
+    setUnreadMessages(prev => ({
+      ...prev,
+      [departmentId]: 0
+    }));
+  }, []);
+
+  // Function to manually refresh unread counts (for testing/debugging)
+  const refreshUnreadCounts = useCallback(async () => {
+    // In a real app, this would fetch from API
+    console.log('Current unread messages:', unreadMessages);
+    console.log('Total unread count:', getTotalUnreadCount());
+  }, [unreadMessages, getTotalUnreadCount]);
+
+  // Add debug function to window for development (remove in production)
+  useEffect(() => {
+    // Only add debug functions in development
+    const isDev = typeof window !== 'undefined' && window.location.hostname === 'localhost';
+    if (isDev) {
+      window.debugAdminDashboard = {
+        refreshUnreadCounts,
+        unreadMessages,
+        getTotalUnreadCount
+      };
+    }
+    return () => {
+      if (isDev && window.debugAdminDashboard) {
+        delete window.debugAdminDashboard;
+      }
+    };
+  }, [unreadMessages, refreshUnreadCounts, getTotalUnreadCount]);
+
+  // Initialize unread messages only once when departments are loaded
+  useEffect(() => {
+    if (departments.length > 0 && !isUnreadMessagesInitialized) {
+      // Use consistent mock data based on department ID for predictable results
+      const mockUnreadMessages = {};
+      departments.forEach((dept, index) => {
+        // Use department ID hash to generate consistent unread count
+        const hash = dept._id.slice(-1); // Use last character of ID
+        const hashNum = parseInt(hash, 16) || 0; // Convert to number
+        
+        if (index < 2) { // Only first 2 departments have unread messages for demo
+          mockUnreadMessages[dept._id] = (hashNum % 4) + 1; // 1-4 messages consistently
+        } else {
+          mockUnreadMessages[dept._id] = 0;
+        }
+      });
+      setUnreadMessages(mockUnreadMessages);
+      setIsUnreadMessagesInitialized(true);
+    }
+  }, [departments, isUnreadMessagesInitialized]);
+
+  // Simulate periodic message updates (separate effect to avoid interference)
+  useEffect(() => {
+    if (!isUnreadMessagesInitialized || departments.length === 0) {
+      return;
+    }
+    
+    const interval = setInterval(() => {
+      if (Math.random() < 0.2) { // 20% chance of new message (reduced frequency)
+        const randomDept = departments[Math.floor(Math.random() * departments.length)];
+        setUnreadMessages(prev => ({
+          ...prev,
+          [randomDept._id]: (prev[randomDept._id] || 0) + 1
+        }));
+      }
+    }, 15000); // Check every 15 seconds (less frequent)
+    
+    return () => clearInterval(interval);
+  }, [departments, isUnreadMessagesInitialized]);
   
   const navigate = useNavigate();
   const token = localStorage.getItem("adminToken");
@@ -64,12 +151,20 @@ function AdminDashboard() {
         setComplaints(data.complaints || []);
         setAdminInfo(prev => ({ ...prev, ...data.admin }));
         
-        // Calculate stats
+        // Calculate stats with additional breakdown
+        const allComplaints = data.complaints || [];
+        const adminManaged = allComplaints.filter(c => c.canManage);
+        const departmentAssigned = allComplaints.filter(c => c.assignmentType === 'department');
+        const unassigned = allComplaints.filter(c => c.assignmentType === 'unassigned');
+        
         const newStats = {
-          pending: data.complaints.filter(c => c.status === "pending").length,
-          in_progress: data.complaints.filter(c => c.status === "in_progress").length,
-          resolved: data.complaints.filter(c => c.status === "resolved").length,
-          total: data.complaints.length
+          pending: allComplaints.filter(c => c.status === "pending").length,
+          in_progress: allComplaints.filter(c => c.status === "in_progress").length,
+          resolved: allComplaints.filter(c => c.status === "resolved").length,
+          total: allComplaints.length,
+          adminManaged: adminManaged.length,
+          departmentAssigned: departmentAssigned.length,
+          unassigned: unassigned.length
         };
         setStats(newStats);
       } else {
@@ -80,6 +175,27 @@ function AdminDashboard() {
       setError("Network error");
     } finally {
       setLoading(false);
+    }
+  }, [token]);
+
+  const fetchDepartments = useCallback(async () => {
+    try {
+      const response = await fetch("http://localhost:5000/department/all", {
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "Content-Type": "application/json"
+        }
+      });
+
+      const data = await response.json();
+      
+      if (response.ok) {
+        setDepartments(data.departments || []);
+      } else {
+        console.error("Failed to fetch departments:", data.error);
+      }
+    } catch (error) {
+      console.error("Fetch departments error:", error);
     }
   }, [token]);
 
@@ -95,7 +211,8 @@ function AdminDashboard() {
     }
 
     fetchComplaints();
-  }, [token, navigate, fetchComplaints]);
+    fetchDepartments();
+  }, [token, navigate, fetchComplaints, fetchDepartments]);
 
   const updateComplaintStatus = async (complaintId, newStatus) => {
     try {
@@ -223,21 +340,272 @@ function AdminDashboard() {
               </p>
             )}
           </div>
-          <button
-            onClick={handleLogout}
-            style={{
-              padding: "10px 20px",
-              backgroundColor: "#dc3545",
-              color: "white",
-              border: "none",
-              borderRadius: "6px",
-              cursor: "pointer",
-              fontSize: "14px",
-              fontWeight: "bold"
-            }}
-          >
-            <FontAwesomeIcon icon={faSignOutAlt} style={{ marginRight: "5px" }} /> Logout
-          </button>
+          
+          {/* Header Actions */}
+          <div style={{ display: "flex", alignItems: "center", gap: "15px" }}>
+            {/* Chat Dropdown */}
+            <div style={{ position: "relative" }}>
+              <button
+                onClick={() => setShowChatDropdown(!showChatDropdown)}
+                style={{
+                  padding: "12px",
+                  backgroundColor: "#007bff",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "50%",
+                  cursor: "pointer",
+                  fontSize: "18px",
+                  fontWeight: "bold",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  position: "relative",
+                  transition: "all 0.3s ease",
+                  width: "48px",
+                  height: "48px"
+                }}
+                onMouseOver={(e) => {
+                  e.target.style.backgroundColor = "#0056b3";
+                  e.target.style.transform = "translateY(-2px)";
+                  e.target.style.boxShadow = "0 4px 12px rgba(0,123,255,0.3)";
+                }}
+                onMouseOut={(e) => {
+                  e.target.style.backgroundColor = "#007bff";
+                  e.target.style.transform = "translateY(0)";
+                  e.target.style.boxShadow = "none";
+                }}
+                title={`Chat with Departments${getTotalUnreadCount() > 0 ? ` (${getTotalUnreadCount()} unread messages)` : ''}`}
+              >
+                <FontAwesomeIcon icon={faComments} />
+                {getTotalUnreadCount() > 0 && (
+                  <span style={{
+                    position: "absolute",
+                    top: "-6px",
+                    right: "-6px",
+                    backgroundColor: "#dc3545",
+                    color: "white",
+                    borderRadius: "50%",
+                    minWidth: "20px",
+                    height: "20px",
+                    fontSize: "11px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontWeight: "bold",
+                    border: "2px solid white",
+                    padding: "0 4px",
+                    lineHeight: "1"
+                  }}>
+                    {getTotalUnreadCount()}
+                  </span>
+                )}
+              </button>
+              
+              {/* Dropdown Menu */}
+              {showChatDropdown && (
+                <div style={{
+                  position: "absolute",
+                  top: "100%",
+                  right: "0",
+                  marginTop: "8px",
+                  backgroundColor: "white",
+                  borderRadius: "8px",
+                  boxShadow: "0 8px 25px rgba(0,0,0,0.15)",
+                  border: "1px solid #e2e8f0",
+                  zIndex: 1000,
+                  minWidth: "350px",
+                  maxHeight: "400px",
+                  overflowY: "auto"
+                }}>
+                  <div style={{
+                    padding: "15px 20px",
+                    borderBottom: "1px solid #e2e8f0",
+                    backgroundColor: "#f8f9fa"
+                  }}>
+                    <h4 style={{
+                      margin: "0",
+                      color: "#333",
+                      fontSize: "16px",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "8px"
+                    }}>
+                      <FontAwesomeIcon icon={faBuilding} style={{ color: "#007bff" }} />
+                      City Departments
+                      <span style={{ 
+                        fontSize: "12px", 
+                        color: "#666", 
+                        fontWeight: "normal" 
+                      }}>
+                        ({departments.length} available)
+                      </span>
+                    </h4>
+                  </div>
+                  
+                  {departments.length > 0 ? (
+                    <div style={{ maxHeight: "300px", overflowY: "auto" }}>
+                      {departments.map(department => (
+                        <div
+                          key={department._id}
+                          onClick={() => {
+                            setSelectedDepartment(department);
+                            setShowChatModal(true);
+                            setShowChatDropdown(false);
+                            // Clear unread count for this department when opening chat
+                            markDepartmentAsRead(department._id);
+                          }}
+                          style={{
+                            padding: "15px 20px",
+                            borderBottom: "1px solid #f0f0f0",
+                            cursor: "pointer",
+                            transition: "all 0.2s ease",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "12px",
+                            position: "relative"
+                          }}
+                          onMouseOver={(e) => {
+                            e.currentTarget.style.backgroundColor = "#f8f9fa";
+                          }}
+                          onMouseOut={(e) => {
+                            e.currentTarget.style.backgroundColor = "transparent";
+                          }}
+                        >
+                          <div style={{
+                            width: "40px",
+                            height: "40px",
+                            backgroundColor: "#007bff",
+                            borderRadius: "50%",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            color: "white",
+                            fontSize: "14px",
+                            fontWeight: "bold"
+                          }}>
+                            {department.name.charAt(0).toUpperCase()}
+                          </div>
+                          <div style={{ flex: 1 }}>
+                            <h5 style={{ 
+                              margin: "0 0 4px 0", 
+                              color: "#333", 
+                              fontSize: "14px",
+                              fontWeight: "600"
+                            }}>
+                              {department.name}
+                              {unreadMessages[department._id] > 0 && (
+                                <span style={{
+                                  marginLeft: "8px",
+                                  backgroundColor: "#dc3545",
+                                  color: "white",
+                                  borderRadius: "12px",
+                                  padding: "2px 6px",
+                                  fontSize: "10px",
+                                  fontWeight: "bold"
+                                }}>
+                                  {unreadMessages[department._id]} new
+                                </span>
+                              )}
+                            </h5>
+                            <p style={{ 
+                              margin: "0", 
+                              color: "#666", 
+                              fontSize: "12px" 
+                            }}>
+                              {department.departmentType}
+                            </p>
+                            {department.contactNumber && (
+                              <p style={{ 
+                                margin: "2px 0 0 0", 
+                                color: "#888", 
+                                fontSize: "11px" 
+                              }}>
+                                <FontAwesomeIcon icon={faPhone} style={{ marginRight: "4px" }} />
+                                {department.contactNumber}
+                              </p>
+                            )}
+                          </div>
+                          <FontAwesomeIcon 
+                            icon={faComments} 
+                            style={{ 
+                              color: unreadMessages[department._id] > 0 ? "#dc3545" : "#007bff", 
+                              fontSize: "16px" 
+                            }} 
+                          />
+                          {unreadMessages[department._id] > 0 && (
+                            <div style={{
+                              position: "absolute",
+                              top: "8px",
+                              right: "8px",
+                              width: "8px",
+                              height: "8px",
+                              backgroundColor: "#dc3545",
+                              borderRadius: "50%",
+                              border: "2px solid white"
+                            }} />
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div style={{
+                      padding: "40px 20px",
+                      textAlign: "center",
+                      color: "#666"
+                    }}>
+                      <FontAwesomeIcon 
+                        icon={faUsers} 
+                        style={{ fontSize: "30px", marginBottom: "10px", color: "#ccc" }} 
+                      />
+                      <p style={{ margin: "0", fontSize: "14px" }}>
+                        No departments found in your city
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+              
+              {/* Click outside handler */}
+              {showChatDropdown && (
+                <div 
+                  style={{
+                    position: "fixed",
+                    top: 0,
+                    left: 0,
+                    width: "100%",
+                    height: "100%",
+                    zIndex: 999
+                  }}
+                  onClick={() => setShowChatDropdown(false)}
+                />
+              )}
+            </div>
+            
+            <button
+              onClick={handleLogout}
+              style={{
+                padding: "10px 20px",
+                backgroundColor: "#dc3545",
+                color: "white",
+                border: "none",
+                borderRadius: "6px",
+                cursor: "pointer",
+                fontSize: "14px",
+                fontWeight: "bold",
+                transition: "all 0.3s ease"
+              }}
+              onMouseOver={(e) => {
+                e.target.style.backgroundColor = "#c82333";
+                e.target.style.transform = "translateY(-1px)";
+              }}
+              onMouseOut={(e) => {
+                e.target.style.backgroundColor = "#dc3545";
+                e.target.style.transform = "translateY(0)";
+              }}
+            >
+              <FontAwesomeIcon icon={faSignOutAlt} style={{ marginRight: "5px" }} /> Logout
+            </button>
+          </div>
         </div>
       </div>
 
@@ -245,9 +613,9 @@ function AdminDashboard() {
         {/* Stats Cards */}
         <div style={{
           display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
-          gap: "20px",
-          marginBottom: "30px"
+          gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+          gap: "15px",
+          marginBottom: "20px"
         }}>
           <div style={{
             backgroundColor: "white",
@@ -258,8 +626,45 @@ function AdminDashboard() {
             border: "3px solid #007bff"
           }}>
             <h2 style={{ margin: "0", color: "#007bff", fontSize: "32px" }}>{stats.total}</h2>
-            <p style={{ margin: "5px 0 0 0", color: "#666" }}><FontAwesomeIcon icon={faChartBar} style={{ marginRight: "5px" }} />Total Complaints</p>
+            <p style={{ margin: "5px 0 0 0", color: "#666", fontSize: "14px" }}>
+              <FontAwesomeIcon icon={faChartBar} style={{ marginRight: "5px" }} />Total City Complaints
+            </p>
           </div>
+          <div style={{
+            backgroundColor: "white",
+            padding: "20px",
+            borderRadius: "8px",
+            boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
+            textAlign: "center",
+            border: "3px solid #6f42c1"
+          }}>
+            <h2 style={{ margin: "0", color: "#6f42c1", fontSize: "32px" }}>{stats.unassigned || 0}</h2>
+            <p style={{ margin: "5px 0 0 0", color: "#666", fontSize: "14px" }}>
+              <FontAwesomeIcon icon={faQuestionCircle} style={{ marginRight: "5px" }} />Unassigned
+            </p>
+          </div>
+          <div style={{
+            backgroundColor: "white",
+            padding: "20px",
+            borderRadius: "8px",
+            boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
+            textAlign: "center",
+            border: "3px solid #fd7e14"
+          }}>
+            <h2 style={{ margin: "0", color: "#fd7e14", fontSize: "32px" }}>{stats.departmentAssigned || 0}</h2>
+            <p style={{ margin: "5px 0 0 0", color: "#666", fontSize: "14px" }}>
+              🏢 Department Assigned
+            </p>
+          </div>
+        </div>
+        
+        {/* Status Stats Cards */}
+        <div style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+          gap: "15px",
+          marginBottom: "30px"
+        }}>
           <div style={{
             backgroundColor: "white",
             padding: "20px",
@@ -269,7 +674,9 @@ function AdminDashboard() {
             border: "3px solid #ffc107"
           }}>
             <h2 style={{ margin: "0", color: "#ffc107", fontSize: "32px" }}>{stats.pending}</h2>
-            <p style={{ margin: "5px 0 0 0", color: "#666" }}><FontAwesomeIcon icon={faClock} style={{ marginRight: "5px" }} />Pending</p>
+            <p style={{ margin: "5px 0 0 0", color: "#666", fontSize: "14px" }}>
+              <FontAwesomeIcon icon={faClock} style={{ marginRight: "5px" }} />Pending
+            </p>
           </div>
           <div style={{
             backgroundColor: "white",
@@ -280,7 +687,9 @@ function AdminDashboard() {
             border: "3px solid #17a2b8"
           }}>
             <h2 style={{ margin: "0", color: "#17a2b8", fontSize: "32px" }}>{stats.in_progress}</h2>
-            <p style={{ margin: "5px 0 0 0", color: "#666" }}><FontAwesomeIcon icon={faSpinner} style={{ marginRight: "5px" }} />In Progress</p>
+            <p style={{ margin: "5px 0 0 0", color: "#666", fontSize: "14px" }}>
+              <FontAwesomeIcon icon={faSpinner} style={{ marginRight: "5px" }} />In Progress
+            </p>
           </div>
           <div style={{
             backgroundColor: "white",
@@ -291,10 +700,14 @@ function AdminDashboard() {
             border: "3px solid #28a745"
           }}>
             <h2 style={{ margin: "0", color: "#28a745", fontSize: "32px" }}>{stats.resolved}</h2>
-            <p style={{ margin: "5px 0 0 0", color: "#666" }}><FontAwesomeIcon icon={faCheckCircle} style={{ marginRight: "5px" }} />Resolved</p>
+            <p style={{ margin: "5px 0 0 0", color: "#666", fontSize: "14px" }}>
+              <FontAwesomeIcon icon={faCheckCircle} style={{ marginRight: "5px" }} />Resolved
+            </p>
           </div>
         </div>
 
+
+        
         {/* Analytics Section */}
         <div style={{
           display: "grid",
@@ -319,6 +732,23 @@ function AdminDashboard() {
               onComplaintSelect={setSelectedComplaint}
             />
           </div>
+        </div>
+
+        {/* Admin City Overview Notice */}
+        <div style={{
+          backgroundColor: "#e3f2fd",
+          padding: "15px 20px",
+          marginBottom: "20px",
+          borderRadius: "8px",
+          boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
+          border: "2px solid #007bff"
+        }}>
+          <p style={{ margin: 0, color: "#333", fontSize: "14px" }}>
+            <FontAwesomeIcon icon={faBuilding} style={{ marginRight: "8px", color: "#007bff" }} />
+            <strong>City Admin Overview:</strong> You can VIEW all {stats.total} complaints from {adminInfo?.city} 
+            but can only MANAGE status of {stats.unassigned || 0} unassigned complaints. 
+            Department-assigned complaints ({stats.departmentAssigned || 0}) are managed by respective departments.
+          </p>
         </div>
 
         {/* Tabs */}
@@ -374,15 +804,57 @@ function AdminDashboard() {
                       border: "1px solid #ddd",
                       borderRadius: "6px",
                       padding: "20px",
-                      backgroundColor: "#f9f9f9",
-                      borderLeft: `5px solid ${getStatusColor(complaint.status)}`
+                      backgroundColor: complaint.canManage ? "#f9f9f9" : "#f8f9fa",
+                      borderLeft: `5px solid ${getStatusColor(complaint.status)}`,
+                      opacity: complaint.canManage ? 1 : 0.85,
+                      position: "relative"
                     }}
                   >
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start", marginBottom: "15px" }}>
+                    {/* Assignment Type Indicator */}
+                    <div style={{
+                      position: "absolute",
+                      top: "10px",
+                      right: "15px",
+                      padding: "4px 8px",
+                      borderRadius: "12px",
+                      fontSize: "11px",
+                      fontWeight: "bold",
+                      backgroundColor: complaint.assignmentType === 'unassigned' ? '#f3e5f5' : '#fff3e0',
+                      color: complaint.assignmentType === 'unassigned' ? '#7b1fa2' : '#f57c00',
+                      border: `1px solid ${complaint.assignmentType === 'unassigned' ? '#7b1fa2' : '#f57c00'}`
+                    }}>
+                      {complaint.assignmentType === 'department' ? 
+                        `🏢 ${complaint.assignedDepartment?.name || 'Assigned'}` : 
+                        '❓ Unassigned'}
+                    </div>
+
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start", marginBottom: "15px", marginRight: "100px" }}>
                       <div style={{ flex: 1 }}>
                         <h4 style={{ margin: "0 0 10px 0", color: "#333" }}>
-                          <FontAwesomeIcon icon={faFileText} style={{ marginRight: "8px" }} />{complaint.description.substring(0, 80)}...
+                          <FontAwesomeIcon icon={faFileText} style={{ marginRight: "8px" }} />
+                          {complaint.description.substring(0, 80)}...
+                          {!complaint.canManage && (
+                            <span style={{ fontSize: "12px", color: "#666", marginLeft: "10px" }}>
+                              (View Only)
+                            </span>
+                          )}
                         </h4>
+                        
+                        {/* Department Assignment Info */}
+                        {complaint.assignmentType === 'department' && complaint.assignedDepartment && (
+                          <div style={{ 
+                            margin: "8px 0", 
+                            padding: "6px 10px", 
+                            backgroundColor: "#fff3e0", 
+                            borderRadius: "4px",
+                            border: "1px solid #ffcc02",
+                            fontSize: "13px"
+                          }}>
+                            <FontAwesomeIcon icon={faBuilding} style={{ marginRight: "5px", color: "#f57c00" }} />
+                            <strong>Assigned to:</strong> {complaint.assignedDepartment.name || 'Department'}
+                          </div>
+                        )}
+                        
                         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))", gap: "10px", fontSize: "14px", color: "#666" }}>
                           <p style={{ margin: 0 }}>
                             <FontAwesomeIcon icon={faMapMarkerAlt} style={{ marginRight: "5px" }} />
@@ -393,10 +865,15 @@ function AdminDashboard() {
                             {complaint.phone}
                           </p>
                           {complaint.priority && 
-                            <p style={{ margin: 0 }}>
-                              <FontAwesomeIcon icon={faBolt} style={{ marginRight: "5px" }} />
-                              Priority: {complaint.priority}
-                            </p>
+                            <div style={{ margin: "4px 0", padding: "4px 8px", borderRadius: "4px", backgroundColor: complaint.priority === 'High' ? '#fee2e2' : complaint.priority === 'Medium' ? '#fef3c7' : '#dcfce7' }}>
+                              <FontAwesomeIcon icon={faBolt} style={{ marginRight: "5px", color: complaint.priority === 'High' ? '#dc2626' : complaint.priority === 'Medium' ? '#f59e0b' : '#10b981' }} />
+                              <strong>Priority:</strong> {complaint.priority === 'High' ? '🚨' : complaint.priority === 'Medium' ? '⚠️' : '📝'} {complaint.priority}
+                              {complaint.priorityReason && (
+                                <div style={{ fontSize: "12px", color: "#6b7280", marginTop: "2px" }}>
+                                  {complaint.priorityReason}
+                                </div>
+                              )}
+                            </div>
                           }
                           <p style={{ margin: 0 }}>
                             <FontAwesomeIcon icon={faCalendarAlt} style={{ marginRight: "5px" }} />
@@ -405,7 +882,7 @@ function AdminDashboard() {
                         </div>
                       </div>
                       
-                      <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+                      <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", marginTop: "30px" }}>
                         <button
                           onClick={() => setSelectedComplaint(complaint)}
                           style={{
@@ -421,7 +898,7 @@ function AdminDashboard() {
                           <FontAwesomeIcon icon={faEye} style={{ marginRight: "5px" }} />View Details
                         </button>
                         
-                        {complaint.status !== "resolved" && (
+                        {complaint.status !== "resolved" && complaint.canManage && (
                           <select
                             value={complaint.status}
                             onChange={(e) => updateComplaintStatus(complaint._id, e.target.value)}
@@ -616,14 +1093,65 @@ function AdminDashboard() {
               
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))", gap: "15px" }}>
                 <div><strong><FontAwesomeIcon icon={faPhone} style={{ marginRight: "5px" }} />Phone:</strong> {selectedComplaint.phone}</div>
-                {selectedComplaint.priority && <div><strong><FontAwesomeIcon icon={faBolt} style={{ marginRight: "5px" }} />Priority:</strong> {selectedComplaint.priority}</div>}
-                {selectedComplaint.reason && <div><strong><FontAwesomeIcon icon={faQuestionCircle} style={{ marginRight: "5px" }} />Reason:</strong> {selectedComplaint.reason}</div>}
+                
+                {selectedComplaint.priority && (
+                  <div style={{ 
+                    gridColumn: "1 / -1",
+                    padding: "10px 12px", 
+                    borderRadius: "8px", 
+                    backgroundColor: selectedComplaint.priority === 'High' ? '#fee2e2' : selectedComplaint.priority === 'Medium' ? '#fef3c7' : '#dcfce7',
+                    border: `1px solid ${selectedComplaint.priority === 'High' ? '#fca5a5' : selectedComplaint.priority === 'Medium' ? '#fde68a' : '#bbf7d0'}`
+                  }}>
+                    <div style={{ display: "flex", alignItems: "center", marginBottom: "6px" }}>
+                      <FontAwesomeIcon 
+                        icon={faBolt} 
+                        style={{ 
+                          marginRight: "8px", 
+                          color: selectedComplaint.priority === 'High' ? '#dc2626' : selectedComplaint.priority === 'Medium' ? '#f59e0b' : '#10b981' 
+                        }} 
+                      />
+                      <strong>Priority: {selectedComplaint.priority === 'High' ? '🚨' : selectedComplaint.priority === 'Medium' ? '⚠️' : '📝'} {selectedComplaint.priority}</strong>
+                    </div>
+                    {selectedComplaint.priorityReason && (
+                      <div style={{ fontSize: "14px", color: "#374151", marginBottom: "4px" }}>
+                        <strong>Reason:</strong> {selectedComplaint.priorityReason}
+                      </div>
+                    )}
+                    {selectedComplaint.areaName && (
+                      <div style={{ fontSize: "12px", color: "#6b7280" }}>
+                        <strong>Area:</strong> {selectedComplaint.areaName}
+                      </div>
+                    )}
+                    {selectedComplaint.highPriorityPlace && (
+                      <div style={{ fontSize: "12px", color: "#6b7280" }}>
+                        <strong>Near:</strong> {selectedComplaint.highPriorityPlace}
+                      </div>
+                    )}
+                  </div>
+                )}
+                
                 <div><strong><FontAwesomeIcon icon={faChartBar} style={{ marginRight: "5px" }} />Status:</strong> <span style={{ color: getStatusColor(selectedComplaint.status) }}>{selectedComplaint.status}</span></div>
                 <div><strong><FontAwesomeIcon icon={faCalendarAlt} style={{ marginRight: "5px" }} />Created:</strong> {new Date(selectedComplaint.createdAt).toLocaleString()}</div>
               </div>
             </div>
 
-            {selectedComplaint.status !== "resolved" && (
+            {/* Assignment Information */}
+            <div style={{ marginBottom: "20px", padding: "12px", backgroundColor: "#f8f9fa", borderRadius: "6px" }}>
+              <strong>Assignment Information:</strong>
+              <div style={{ marginTop: "8px", fontSize: "14px" }}>
+                {selectedComplaint.assignmentType === 'department' ? (
+                  <span style={{ color: "#f57c00" }}>
+                    🏢 <strong>Department Assigned:</strong> This complaint is managed by {selectedComplaint.assignedDepartment?.name || 'a department'}. You can view details but cannot change status.
+                  </span>
+                ) : (
+                  <span style={{ color: "#7b1fa2" }}>
+                    ❓ <strong>Unassigned:</strong> This complaint hasn't been assigned to any department yet. You can update its status.
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {selectedComplaint.status !== "resolved" && selectedComplaint.canManage && (
               <div style={{ marginTop: "20px", padding: "15px", backgroundColor: "#f8f9fa", borderRadius: "6px" }}>
                 <strong>Update Status:</strong>
                 <div style={{ marginTop: "10px" }}>
@@ -651,8 +1179,29 @@ function AdminDashboard() {
                 </div>
               </div>
             )}
+            
+            {selectedComplaint.status !== "resolved" && !selectedComplaint.canManage && (
+              <div style={{ marginTop: "20px", padding: "15px", backgroundColor: "#fff3cd", borderRadius: "6px", border: "1px solid #ffeeba" }}>
+                <span style={{ color: "#856404" }}>
+                  <FontAwesomeIcon icon={faExclamationTriangle} style={{ marginRight: "8px" }} />
+                  <strong>Note:</strong> This complaint is managed by a department. Only they can update its status.
+                </span>
+              </div>
+            )}
           </div>
         </div>
+      )}
+
+      {/* Admin-Department Chat Modal */}
+      {showChatModal && selectedDepartment && (
+        <AdminDeptChatModal
+          isOpen={showChatModal}
+          department={selectedDepartment}
+          onClose={() => {
+            setShowChatModal(false);
+            setSelectedDepartment(null);
+          }}
+        />
       )}
     </div>
   );
