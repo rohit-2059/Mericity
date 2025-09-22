@@ -495,5 +495,9 @@ If you encounter any issues or have questions:
 - **TailwindCSS** for modern styling utilities
 
 ---
+## Our Team
+<a href="https://github.com/rohit-2059/Civic-Sense-Crowdsourced-Issue-Reporting/graphs/contributors">
+<img src="https://contributors-img.web.app/image?repo=rohit-2059/Civic-Sense-Crowdsourced-Issue-Reporting"/>
+---
 
 **Built with ❤️ for better municipal governance and citizen engagement**
