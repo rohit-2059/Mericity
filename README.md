@@ -497,6 +497,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ---
 ## Our Team
 <a href="https://github.com/rohit-2059/Civic-Sense-Crowdsourced-Issue-Reporting/graphs/contributors">
+
 <img src="https://contributors-img.web.app/image?repo=rohit-2059/Civic-Sense-Crowdsourced-Issue-Reporting"/>
 ---
 
