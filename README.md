@@ -1,235 +1,466 @@
-# MeriCity – Crowdsourced Civic Issue Reporting# 🏛️ MeriCity - Civic Sense Crowdsourced Issue Reporting# 🏛️ MeriCity - Civic Sense Crowdsourced Issue Reporting# 🏛️ Municipal Complaint Management System
+# 🏛️ MeriCity - Civic Sense Crowdsourced Issue Reporting# MeriCity – Crowdsourced Civic Issue Reporting# 🏛️ MeriCity - Civic Sense Crowdsourced Issue Reporting# 🏛️ MeriCity - Civic Sense Crowdsourced Issue Reporting# 🏛️ Municipal Complaint Management System
 
 
 
-Live: https://www.mericity.app
+**Live Application:** [www.mericity.app](https://www.mericity.app)
 
 
 
-MeriCity helps citizens report civic issues with photos, GPS location, and smart routing to the right department. It gives admins and departments powerful tools to triage, communicate, and resolve issues efficiently.**Live Application:** [www.mericity.app](https://www.mericity.app)
+MeriCity is a comprehensive municipal complaint management system that empowers citizens to report civic issues while providing government departments with intelligent tools for efficient resolution. Built for Smart India Hackathon (SIH), this platform bridges the gap between citizens and municipal authorities through technology.Live: https://www.mericity.app
 
 
+
+![React](https://img.shields.io/badge/React-61DAFB?style=for-the-badge&logo=react&logoColor=black)
+
+![Node.js](https://img.shields.io/badge/Node.js-339933?style=for-the-badge&logo=nodedotjs&logoColor=white)
+
+![Express.js](https://img.shields.io/badge/Express.js-000000?style=for-the-badge&logo=express&logoColor=white)MeriCity helps citizens report civic issues with photos, GPS location, and smart routing to the right department. It gives admins and departments powerful tools to triage, communicate, and resolve issues efficiently.**Live Application:** [www.mericity.app](https://www.mericity.app)
+
+![MongoDB](https://img.shields.io/badge/MongoDB-47A248?style=for-the-badge&logo=mongodb&logoColor=white)
+
+![Google Maps](https://img.shields.io/badge/Google_Maps-4285F4?style=for-the-badge&logo=googlemaps&logoColor=white)
+
+![AI](https://img.shields.io/badge/Google_Vision_AI-4285F4?style=for-the-badge&logo=google&logoColor=white)
 
 ---
 
+## ✨ Core Features
 
 
-## FeaturesMeriCity is a comprehensive municipal complaint management system that empowers citizens to report civic issues while providing government departments with intelligent tools for efficient resolution. Built for Smart India Hackathon (SIH), this platform bridges the gap between citizens and municipal authorities through technology.**Live Application:** [www.mericity.app](https://www.mericity.app)A comprehensive web application for citizens to submit municipal complaints with location tracking, file uploads, and admin management capabilities. Features Google OAuth authentication, real-time location services, and a robust admin dashboard for complaint management.
-
-
-
-- Authentication
-
-  - Google OAuth login
-
-  - OTP-based phone verification![MongoDB](https://img.shields.io/badge/MongoDB-47A248?style=for-the-badge&logo=mongodb&logoColor=white)
-
-  - Role-based access: Citizen, Admin, Department
-
-- Complaint submission![Express.js](https://img.shields.io/badge/Express.js-000000?style=for-the-badge&logo=express&logoColor=white)
-
-  - Photo upload with automatic GPS tagging
-
-  - AI-powered description (Google Vision)![React](https://img.shields.io/badge/React-61DAFB?style=for-the-badge&logo=react&logoColor=black)MeriCity is a comprehensive municipal complaint management system that empowers citizens to report civic issues while providing government departments with intelligent tools for efficient resolution. Built for Smart India Hackathon (SIH), this platform bridges the gap between citizens and municipal authorities through technology.![MongoDB](https://img.shields.io/badge/MongoDB-47A248?style=for-the-badge&logo=mongodb&logoColor=white)
-
-  - Voice/text inputs, priority selection
-
-  - Status tracking: Pending → In Progress → Resolved![Node.js](https://img.shields.io/badge/Node.js-339933?style=for-the-badge&logo=nodedotjs&logoColor=white)
-
-- Maps and location
-
-  - Live map of all issues, national coverage![Google Maps](https://img.shields.io/badge/Google_Maps-4285F4?style=for-the-badge&logo=googlemaps&logoColor=white)![Express.js](https://img.shields.io/badge/Express.js-000000?style=for-the-badge&logo=express&logoColor=white)
-
-  - Advanced filters and heatmaps
-
-- Smart routing and admin tools![AI](https://img.shields.io/badge/Google_Vision_AI-4285F4?style=for-the-badge&logo=google&logoColor=white)
-
-  - Auto-assign to correct department
-
-  - Performance analytics and warning system![MongoDB](https://img.shields.io/badge/MongoDB-47A248?style=for-the-badge&logo=mongodb&logoColor=white)![React](https://img.shields.io/badge/React-61DAFB?style=for-the-badge&logo=react&logoColor=black)
-
-  - Bulk actions and inter-department communication
-
-- Engagement and communication## ✨ Core Features
-
-  - Real-time chat between citizen and department
-
-  - Notifications and updates![Express.js](https://img.shields.io/badge/Express.js-000000?style=for-the-badge&logo=express&logoColor=white)![Node.js](https://img.shields.io/badge/Node.js-339933?style=for-the-badge&logo=nodedotjs&logoColor=white)
-
-  - Points, rewards, leaderboards
 
 ### 🔐 Smart Authentication System
 
----
-
-- **Google OAuth 2.0 Integration** - Seamless login with Google accounts![React](https://img.shields.io/badge/React-61DAFB?style=for-the-badge&logo=react&logoColor=black)![Google Maps](https://img.shields.io/badge/Google_Maps-4285F4?style=for-the-badge&logo=googlemaps&logoColor=white)
-
-## Tech Stack
+- **Google OAuth 2.0 Integration** - Seamless login with Google accounts## FeaturesMeriCity is a comprehensive municipal complaint management system that empowers citizens to report civic issues while providing government departments with intelligent tools for efficient resolution. Built for Smart India Hackathon (SIH), this platform bridges the gap between citizens and municipal authorities through technology.**Live Application:** [www.mericity.app](https://www.mericity.app)A comprehensive web application for citizens to submit municipal complaints with location tracking, file uploads, and admin management capabilities. Features Google OAuth authentication, real-time location services, and a robust admin dashboard for complaint management.
 
 - **Phone Verification System** - OTP-based verification for enhanced security
 
-- Backend: Node.js, Express.js, MongoDB (Mongoose), JWT, Multer, Socket.io
-
-- Frontend: React + Vite, React Router, TailwindCSS, Chart.js, Axios- **Multi-level Access Control** - Citizen, Admin, and Department dashboards![Node.js](https://img.shields.io/badge/Node.js-339933?style=for-the-badge&logo=nodedotjs&logoColor=white)
-
-- AI/Maps/Comms: Google Vision API, Google Maps/Geocoding, Twilio (OTP/SMS)
+- **Multi-level Access Control** - Citizen, Admin, and Department dashboards
 
 - **Profile Management** - Complete user profiles with verification status
 
----
-
-![Google Maps](https://img.shields.io/badge/Google_Maps-4285F4?style=for-the-badge&logo=googlemaps&logoColor=white)## 📋 Table of Contents
-
-## API (high level)
+- Authentication
 
 ### 📸 Advanced Complaint Submission
 
-Authentication
+- **Photo Upload with Automatic GPS Tagging** - Location-embedded image uploads  - Google OAuth login
 
-```- **Photo Upload with Automatic GPS Tagging** - Location-embedded image uploads![AI](https://img.shields.io/badge/Google_Vision_AI-4285F4?style=for-the-badge&logo=google&logoColor=white)
+- **AI-Powered Description Generation** - Google Vision AI analyzes images and suggests professional descriptions
 
-POST /auth/google
+- **Multi-Modal Input System** - Support for text, voice, and image complaints  - OTP-based phone verification![MongoDB](https://img.shields.io/badge/MongoDB-47A248?style=for-the-badge&logo=mongodb&logoColor=white)
 
-POST /auth/register- **AI-Powered Description Generation** - Google Vision AI analyzes images and suggests professional descriptions
+- **Smart Location System** - Users can verify and manually adjust locations for accuracy
 
-POST /auth/login
-
-POST /auth/verify-phone- **Multi-Modal Input System** - Support for text, voice, and image complaints- [Features](#-features)
-
-POST /auth/verify-otp
-
-```- **Smart Location System** - Users can verify and manually adjust locations for accuracy
+- **Priority Classification** - Intelligent priority system based on urgency and volume  - Role-based access: Citizen, Admin, Department
 
 
 
-Users- **Priority Classification** - Intelligent priority system based on urgency and volume## ✨ Core Features- [Tech Stack](#-tech-stack)
+### 🗺️ Comprehensive Community Mapping- Complaint submission![Express.js](https://img.shields.io/badge/Express.js-000000?style=for-the-badge&logo=express&logoColor=white)
+
+- **Live Interactive Map** - Real-time visualization of all reported issues
+
+- **National Scope Coverage** - City-agnostic platform with advanced filtering  - Photo upload with automatic GPS tagging
+
+- **Heat Map Analytics** - Visual representation of complaint density
+
+- **Location-Based Filtering** - Filter complaints by area, ward, or custom boundaries  - AI-powered description (Google Vision)![React](https://img.shields.io/badge/React-61DAFB?style=for-the-badge&logo=react&logoColor=black)MeriCity is a comprehensive municipal complaint management system that empowers citizens to report civic issues while providing government departments with intelligent tools for efficient resolution. Built for Smart India Hackathon (SIH), this platform bridges the gap between citizens and municipal authorities through technology.![MongoDB](https://img.shields.io/badge/MongoDB-47A248?style=for-the-badge&logo=mongodb&logoColor=white)
+
+
+
+### 🎯 Intelligent Department Routing  - Voice/text inputs, priority selection
+
+- **Smart Department Assignment** - AI-powered routing to correct departments
+
+- **State-Specific Customization** - Complete department database for each state  - Status tracking: Pending → In Progress → Resolved![Node.js](https://img.shields.io/badge/Node.js-339933?style=for-the-badge&logo=nodedotjs&logoColor=white)
+
+- **Automated Workflow** - Seamless complaint escalation and tracking
+
+- **Performance Metrics** - Department efficiency monitoring- Maps and location
+
+
+
+### 💬 Advanced Communication System  - Live map of all issues, national coverage![Google Maps](https://img.shields.io/badge/Google_Maps-4285F4?style=for-the-badge&logo=googlemaps&logoColor=white)![Express.js](https://img.shields.io/badge/Express.js-000000?style=for-the-badge&logo=express&logoColor=white)
+
+- **Real-time Chat Interface** - Direct communication between citizens and departments
+
+- **Multi-participant Conversations** - Citizens, admins, and departments in single thread  - Advanced filters and heatmaps
+
+- **File Sharing** - Share additional evidence and updates
+
+- **Notification System** - Real-time updates via web notifications- Smart routing and admin tools![AI](https://img.shields.io/badge/Google_Vision_AI-4285F4?style=for-the-badge&logo=google&logoColor=white)
+
+
+
+### 🏆 Gamified Engagement System  - Auto-assign to correct department
+
+- **Points & Rewards Program** - Citizens earn points for reporting genuine issues
+
+- **Leaderboards** - Community engagement through friendly competition  - Performance analytics and warning system![MongoDB](https://img.shields.io/badge/MongoDB-47A248?style=for-the-badge&logo=mongodb&logoColor=white)![React](https://img.shields.io/badge/React-61DAFB?style=for-the-badge&logo=react&logoColor=black)
+
+- **Badge System** - Recognition for active civic participation
+
+- **Redemption Store** - Exchange points for rewards and benefits  - Bulk actions and inter-department communication
+
+
+
+### 📊 Three-Tier Dashboard System- Engagement and communication## ✨ Core Features
+
+- **Citizen Dashboard** - Personal complaint tracking and community engagement
+
+- **Admin Control Center** - City-wide oversight with performance analytics  - Real-time chat between citizen and department
+
+- **Department Dashboard** - Specialized tools for issue resolution and workflow management
+
+  - Notifications and updates![Express.js](https://img.shields.io/badge/Express.js-000000?style=for-the-badge&logo=express&logoColor=white)![Node.js](https://img.shields.io/badge/Node.js-339933?style=for-the-badge&logo=nodedotjs&logoColor=white)
+
+### 🔍 Advanced Admin Features
+
+- **Performance Oversight** - Real-time monitoring of department efficiency  - Points, rewards, leaderboards
+
+- **Inter-department Communication** - Seamless coordination between departments
+
+- **Analytics & Reporting** - Comprehensive insights and data visualization### 🔐 Smart Authentication System
+
+- **Bulk Operations** - Efficient management of multiple complaints
+
+- **Warning System** - Automated alerts for delayed responses---
+
+
+
+### 🚨 Smart Issue Management- **Google OAuth 2.0 Integration** - Seamless login with Google accounts![React](https://img.shields.io/badge/React-61DAFB?style=for-the-badge&logo=react&logoColor=black)![Google Maps](https://img.shields.io/badge/Google_Maps-4285F4?style=for-the-badge&logo=googlemaps&logoColor=white)
+
+- **Automatic Priority Detection** - AI analyzes complaint content for urgency
+
+- **Duplicate Detection** - Prevents spam and identifies recurring issues## Tech Stack
+
+- **Status Tracking** - Real-time updates from submission to resolution
+
+- **Escalation Protocols** - Automated escalation for overdue complaints- **Phone Verification System** - OTP-based verification for enhanced security
+
+
+
+## 🛠️ Tech Stack- Backend: Node.js, Express.js, MongoDB (Mongoose), JWT, Multer, Socket.io
+
+
+
+### Backend- Frontend: React + Vite, React Router, TailwindCSS, Chart.js, Axios- **Multi-level Access Control** - Citizen, Admin, and Department dashboards![Node.js](https://img.shields.io/badge/Node.js-339933?style=for-the-badge&logo=nodedotjs&logoColor=white)
+
+- **Node.js** - JavaScript runtime environment
+
+- **Express.js** - Web application framework- AI/Maps/Comms: Google Vision API, Google Maps/Geocoding, Twilio (OTP/SMS)
+
+- **MongoDB** - NoSQL database with Mongoose ODM
+
+- **JWT** - JSON Web Tokens for authentication- **Profile Management** - Complete user profiles with verification status
+
+- **Bcrypt.js** - Password hashing and encryption
+
+- **Multer** - File upload middleware---
+
+- **Google Auth Library** - OAuth 2.0 implementation
+
+- **Google Maps API** - Geocoding and reverse geocoding services![Google Maps](https://img.shields.io/badge/Google_Maps-4285F4?style=for-the-badge&logo=googlemaps&logoColor=white)## 📋 Table of Contents
+
+
+
+### Frontend## API (high level)
+
+- **React 19** - Modern JavaScript library for building user interfaces
+
+- **React Router DOM** - Client-side routing### 📸 Advanced Complaint Submission
+
+- **Vite** - Fast build tool and development server
+
+- **TailwindCSS** - Utility-first CSS frameworkAuthentication
+
+- **FontAwesome** - Icon library
+
+- **Chart.js** - Interactive charts and graphs```- **Photo Upload with Automatic GPS Tagging** - Location-embedded image uploads![AI](https://img.shields.io/badge/Google_Vision_AI-4285F4?style=for-the-badge&logo=google&logoColor=white)
+
+- **Axios** - HTTP client for API requests
+
+- **Google OAuth React** - Google authentication componentPOST /auth/google
+
+
+
+### AI & External ServicesPOST /auth/register- **AI-Powered Description Generation** - Google Vision AI analyzes images and suggests professional descriptions
+
+- **Google Vision API** - Image analysis and text extraction
+
+- **Google Geocoding API** - Address resolution and location servicesPOST /auth/login
+
+- **Twilio API** - SMS notifications and phone verification
+
+- **Google OAuth 2.0** - Secure authenticationPOST /auth/verify-phone- **Multi-Modal Input System** - Support for text, voice, and image complaints- [Features](#-features)
+
+
+
+## 📡 API EndpointsPOST /auth/verify-otp
+
+
+
+### Authentication```- **Smart Location System** - Users can verify and manually adjust locations for accuracy
+
+```
+
+POST /auth/google              # Google OAuth login
+
+POST /auth/register           # Manual registration
+
+POST /auth/login             # Email/password loginUsers- **Priority Classification** - Intelligent priority system based on urgency and volume## ✨ Core Features- [Tech Stack](#-tech-stack)
+
+POST /auth/verify-phone      # Phone number verification
+
+POST /auth/verify-otp        # OTP verification```
 
 ```
 
 GET  /user/me
 
-PUT  /user/me
+### User Management
 
-POST /user/complete### 🗺️ Comprehensive Community Mapping- [Project Structure](#-project-structure)
+```PUT  /user/me
 
-GET  /user/points
+GET  /user/me                # Get user profile
+
+PUT  /user/me                # Update profilePOST /user/complete### 🗺️ Comprehensive Community Mapping- [Project Structure](#-project-structure)
+
+POST /user/complete          # Complete profile setup
+
+GET  /user/points           # Get user reward pointsGET  /user/points
+
+```
 
 ```- **Live Interactive Map** - Real-time visualization of all reported issues
 
-
-
-Complaints- **National Scope Coverage** - City-agnostic platform with advanced filtering### 🔐 Smart Authentication System- [Installation](#-installation)
+### Complaints
 
 ```
 
-GET  /complaints- **Heat Map Analytics** - Visual representation of complaint density
+GET  /complaints             # Get user complaints
 
-POST /complaints
+POST /complaints             # Submit new complaintComplaints- **National Scope Coverage** - City-agnostic platform with advanced filtering### 🔐 Smart Authentication System- [Installation](#-installation)
 
-GET  /complaints/:id- **Location-Based Filtering** - Filter complaints by area, ward, or custom boundaries- **Google OAuth 2.0 Integration** - Seamless login with Google accounts- [Configuration](#-configuration)
+GET  /complaints/:id         # Get specific complaint
 
-PUT  /complaints/:id
+PUT  /complaints/:id         # Update complaint```
 
-POST /complaints/:id/messages
+POST /complaints/:id/messages # Add message to complaint
+
+GET  /complaints/community   # Get public complaintsGET  /complaints- **Heat Map Analytics** - Visual representation of complaint density
+
+POST /complaints/vision-ocr  # AI image analysis
+
+```POST /complaints
+
+
+
+### Chat SystemGET  /complaints/:id- **Location-Based Filtering** - Filter complaints by area, ward, or custom boundaries- **Google OAuth 2.0 Integration** - Seamless login with Google accounts- [Configuration](#-configuration)
+
+```
+
+GET  /chat/:complaintId      # Get chat messagesPUT  /complaints/:id
+
+POST /chat/:complaintId      # Send message
+
+PUT  /chat/:complaintId/status # Update chat statusPOST /complaints/:id/messages
+
+```
 
 GET  /complaints/community
 
-POST /complaints/vision-ocr### 🎯 Intelligent Department Routing- **Phone Verification System** - OTP-based verification for enhanced security- [Usage](#-usage)
+### Admin Dashboard
+
+```POST /complaints/vision-ocr### 🎯 Intelligent Department Routing- **Phone Verification System** - OTP-based verification for enhanced security- [Usage](#-usage)
+
+POST /admin/login            # Admin authentication
+
+GET  /admin/complaints       # Get assigned complaints```
+
+PUT  /admin/complaints/:id/status # Update status
+
+POST /admin/complaints/:id/respond # Add response- **Smart Department Assignment** - AI-powered routing to correct departments
+
+GET  /admin/analytics        # Dashboard statistics
+
+POST /admin/warning          # Issue warningsChat
 
 ```
-
-- **Smart Department Assignment** - AI-powered routing to correct departments
-
-Chat
 
 ```- **State-Specific Customization** - Complete department database for each state- **Multi-level Access Control** - Citizen, Admin, and Department dashboards- [API Endpoints](#-api-endpoints)
 
-GET  /chat/:complaintId
+### Department Management
 
-POST /chat/:complaintId- **Automated Workflow** - Seamless complaint escalation and tracking
+```GET  /chat/:complaintId
 
-PUT  /chat/:complaintId/status
+POST /department/login       # Department authentication
 
-```- **Performance Metrics** - Department efficiency monitoring- **Profile Management** - Complete user profiles with verification status- [File Structure Explained](#-file-structure-explained)
+GET  /department/complaints  # Get department complaintsPOST /chat/:complaintId- **Automated Workflow** - Seamless complaint escalation and tracking
 
+PUT  /department/accept      # Accept complaint
 
+PUT  /department/reject      # Reject complaintPUT  /chat/:complaintId/status
 
-Admin
+GET  /department/analytics   # Performance metrics
 
-```
-
-POST /admin/login### 💬 Advanced Communication System- [Contributing](#-contributing)
-
-GET  /admin/complaints
-
-PUT  /admin/complaints/:id/status- **Real-time Chat Interface** - Direct communication between citizens and departments
-
-POST /admin/complaints/:id/respond
-
-GET  /admin/analytics- **Multi-participant Conversations** - Citizens, admins, and departments in single thread### 📸 Advanced Complaint Submission- [License](#-license)
-
-POST /admin/warning
-
-```- **File Sharing** - Share additional evidence and updates
+``````- **Performance Metrics** - Department efficiency monitoring- **Profile Management** - Complete user profiles with verification status- [File Structure Explained](#-file-structure-explained)
 
 
 
-Department- **Notification System** - Real-time updates via web notifications- **Photo Upload with Automatic GPS Tagging** - Location-embedded image uploads
+### Rewards & Notifications
 
 ```
 
-POST /department/login
+GET  /rewards               # Get available rewardsAdmin
 
-GET  /department/complaints
+POST /rewards/redeem        # Redeem points
 
-PUT  /department/accept### 🏆 Gamified Engagement System- **AI-Powered Description Generation** - Google Vision AI analyzes images and suggests professional descriptions## ✨ Features
+GET  /notifications         # Get user notifications```
 
-PUT  /department/reject
+PUT  /notifications/:id/read # Mark as read
 
-GET  /department/analytics- **Points & Rewards Program** - Citizens earn points for reporting genuine issues
+```POST /admin/login### 💬 Advanced Communication System- [Contributing](#-contributing)
+
+
+
+## 🚀 InstallationGET  /admin/complaints
+
+
+
+### PrerequisitesPUT  /admin/complaints/:id/status- **Real-time Chat Interface** - Direct communication between citizens and departments
+
+- **Node.js** (v16 or higher)
+
+- **MongoDB** (local or MongoDB Atlas)POST /admin/complaints/:id/respond
+
+- **Google Cloud Console** account
+
+- **Twilio Account** for SMS servicesGET  /admin/analytics- **Multi-participant Conversations** - Citizens, admins, and departments in single thread### 📸 Advanced Complaint Submission- [License](#-license)
+
+
+
+### 1. Clone RepositoryPOST /admin/warning
+
+```bash
+
+git clone https://github.com/rohit-2059/Civic-Sense-Crowdsourced-Issue-Reporting.git```- **File Sharing** - Share additional evidence and updates
+
+cd Civic-Sense-Crowdsourced-Issue-Reporting
 
 ```
 
-- **Leaderboards** - Community engagement through friendly competition- **Multi-Modal Input System** - Support for text, voice, and image complaints
 
-Rewards & Notifications
 
-```- **Badge System** - Recognition for active civic participation
+### 2. Backend SetupDepartment- **Notification System** - Real-time updates via web notifications- **Photo Upload with Automatic GPS Tagging** - Location-embedded image uploads
 
-GET  /rewards
+```bash
 
-POST /rewards/redeem- **Redemption Store** - Exchange points for rewards and benefits- **Smart Location System** - Users can verify and manually adjust locations for accuracy### 🔐 User Authentication
+cd backend```
 
-GET  /notifications
+npm install
 
-PUT  /notifications/:id/read
+```POST /department/login
+
+
+
+Create backend `.env`:GET  /department/complaints
+
+```env
+
+MONGODB_URI=mongodb://localhost:27017/mericityPUT  /department/accept### 🏆 Gamified Engagement System- **AI-Powered Description Generation** - Google Vision AI analyzes images and suggests professional descriptions## ✨ Features
+
+JWT_SECRET=replace_with_strong_secret
+
+GOOGLE_CLIENT_ID=your_google_client_id.apps.googleusercontent.comPUT  /department/reject
+
+GOOGLE_MAPS_API_KEY=your_google_maps_api_key
+
+GOOGLE_VISION_API_KEY=your_google_vision_api_keyGET  /department/analytics- **Points & Rewards Program** - Citizens earn points for reporting genuine issues
+
+TWILIO_ACCOUNT_SID=your_twilio_account_sid
+
+TWILIO_AUTH_TOKEN=your_twilio_auth_token```
+
+TWILIO_PHONE_NUMBER=your_twilio_phone_number
+
+PORT=5000- **Leaderboards** - Community engagement through friendly competition- **Multi-Modal Input System** - Support for text, voice, and image complaints
+
+NODE_ENV=development
+
+```Rewards & Notifications
+
+
+
+### 3. Frontend Setup```- **Badge System** - Recognition for active civic participation
+
+```bash
+
+cd ../frontendGET  /rewards
+
+npm install
+
+```POST /rewards/redeem- **Redemption Store** - Exchange points for rewards and benefits- **Smart Location System** - Users can verify and manually adjust locations for accuracy### 🔐 User Authentication
+
+
+
+Create frontend `.env`:GET  /notifications
+
+```env
+
+VITE_GOOGLE_CLIENT_ID=your_google_client_id.apps.googleusercontent.comPUT  /notifications/:id/read
+
+VITE_GOOGLE_MAPS_API_KEY=your_google_maps_api_key
+
+VITE_API_BASE_URL=http://localhost:5000```
 
 ```
 
 ### 📊 Three-Tier Dashboard System- **Priority Classification** - Intelligent priority system based on urgency and volume
 
----
+### 4. Seed Data (Optional)
 
-- **Citizen Dashboard** - Personal complaint tracking and community engagement
+```bash---
 
-## Installation
+cd ../backend
 
-- **Admin Control Center** - City-wide oversight with performance analytics- **Google OAuth 2.0 Integration** - Secure login with Google accounts
+node seedDepartments.js- **Citizen Dashboard** - Personal complaint tracking and community engagement
 
-Prerequisites
+node seedRewards.js
 
-- Node.js 16+- **Department Dashboard** - Specialized tools for issue resolution and workflow management
+```## Installation
 
-- MongoDB (local or Atlas)
 
-- Google Cloud project (OAuth, Vision, Maps)### 🗺️ Comprehensive Community Mapping- **Manual Registration/Login** - Traditional email/password authentication
+
+### 5. Run Application- **Admin Control Center** - City-wide oversight with performance analytics- **Google OAuth 2.0 Integration** - Secure login with Google accounts
+
+```bash
+
+# BackendPrerequisites
+
+cd backend
+
+npm run dev- Node.js 16+- **Department Dashboard** - Specialized tools for issue resolution and workflow management
+
+
+
+# Frontend- MongoDB (local or Atlas)
+
+cd ../frontend
+
+npm run dev- Google Cloud project (OAuth, Vision, Maps)### 🗺️ Comprehensive Community Mapping- **Manual Registration/Login** - Traditional email/password authentication
+
+```
 
 - Twilio account (for OTP)
 
+**Local Application:** http://localhost:5173
+
 ### 🔍 Advanced Admin Features
+
+---
 
 1) Clone
 
+**Built by Rohit Khandelwal • For Smart India Hackathon (SIH)**
 ```bash- **Performance Oversight** - Real-time monitoring of department efficiency- **Live Interactive Map** - Real-time visualization of all reported issues- **Profile Management** - Complete user profiles with personal information
 
 git clone https://github.com/rohit-2059/Civic-Sense-Crowdsourced-Issue-Reporting.git
