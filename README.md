@@ -127,31 +127,6 @@ PUT  /notifications/:id/read     # Mark as read
 
 ---
 
-## 🏗️ Project Structure
-
-```
-Civic-Sense-Crowdsourced-Issue-Reporting/
-├── backend/
-│   ├── models/          # Mongoose schemas: User, Admin, Complaint
-│   ├── routes/          # API endpoint handlers
-│   ├── services/        # Google Maps/Geocoding, Vision AI
-│   ├── middleware/      # JWT auth, error handling
-│   ├── uploads/         # Uploaded files
-│   ├── .env             # Backend environment variables
-│   └── server.js        # Express entrypoint
-├── frontend/
-│   ├── public/          # Static assets
-│   ├── src/
-│   │   ├── components/  # Reusable React components (forms, maps, charts)
-│   │   ├── pages/       # Main app pages (login, dashboard, admin)
-│   │   └── App.jsx
-│   ├── .env             # Frontend environment variables
-│   └── main.jsx
-└── README.md
-```
-
----
-
 ## 🚀 Quick Start
 
 ### Prerequisites
