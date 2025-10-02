@@ -245,7 +245,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for details.
 
 ---
 
-**Developed by:** Rohit Khandelwa  
+**Developed by:** Rohit Khandelwal
 **For:** Smart India Hackathon (SIH)  
 **Contact:** rohitkhandelwal2059@gmail.com  
 **Live:** [www.mericity.app](https://www.mericity.app)
