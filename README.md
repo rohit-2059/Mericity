@@ -235,12 +235,6 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for details.
 
 ---
 
-## 📝 License
-
-This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.
-
----
-
 ## 🙏 Acknowledgments
 
 - Google Cloud Platform (Maps, Vision, OAuth)
@@ -251,7 +245,7 @@ This project is licensed under the MIT License. See [LICENSE](LICENSE) for detai
 
 ---
 
-**Developed by:** Rohit Khandelwal  
+**Developed by:** Rohit Khandelwa  
 **For:** Smart India Hackathon (SIH)  
 **Contact:** rohitkhandelwal2059@gmail.com  
 **Live:** [www.mericity.app](https://www.mericity.app)
